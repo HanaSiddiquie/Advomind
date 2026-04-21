@@ -4,20 +4,16 @@ import API from "../services/api";
 
 function CaseDetails() {
   const { id } = useParams();
+  const caseId = String(id);
+
   const [caseData, setCaseData] = useState(null);
-  const [tab, setTab] = useState("view");
-
   const [allHearings, setAllHearings] = useState([]);
+  const [tab, setTab] = useState("view");
+  const [loading, setLoading] = useState(true);
 
-  // ✅ NEW: Add Hearing form
-  const [hearingForm, setHearingForm] = useState({
-    id: "",
-    date: "",
-    event: "",
-    notes: "",
-    reminder: ""
-  });
-
+  // =========================
+  // FORM (CASE)
+  // =========================
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -27,13 +23,29 @@ function CaseDetails() {
   });
 
   // =========================
+  // FORM (HEARING)
+  // =========================
+  const [hearingForm, setHearingForm] = useState({
+    id: "",
+    date: "",
+    event: "",
+    notes: "",
+    reminder: ""
+  });
+
+  // =========================
   // FETCH CASE
   // =========================
   const fetchCase = () => {
+    setLoading(true);
+
     API.get("/cases")
       .then(res => {
-        const found = (res.data.data || []).find(c => c.id === id);
-        setCaseData(found);
+        const found = (res.data.data || []).find(
+          c => String(c.id) === caseId
+        );
+
+        setCaseData(found || null);
 
         if (found) {
           setForm({
@@ -44,8 +56,10 @@ function CaseDetails() {
             diary: found.diary || ""
           });
         }
+
+        setLoading(false);
       })
-      .catch(err => console.log(err));
+      .catch(() => setLoading(false));
   };
 
   // =========================
@@ -66,21 +80,20 @@ function CaseDetails() {
   // UPDATE CASE
   // =========================
   const updateCase = () => {
-    API.put(`/cases/${id}`, form)
-      .then(() => fetchCase())
+    API.put(`/cases/${caseId}`, form)
+      .then(fetchCase)
       .catch(err => console.log(err));
   };
 
   // =========================
-  // ADD HEARING (NEW)
+  // ADD HEARING
   // =========================
   const addHearing = () => {
     API.post("/hearings", {
       ...hearingForm,
-      case_id: id
+      case_id: caseId
     })
       .then(() => {
-        fetchHearings();
         setHearingForm({
           id: "",
           date: "",
@@ -88,31 +101,39 @@ function CaseDetails() {
           notes: "",
           reminder: ""
         });
+        fetchHearings();
       })
       .catch(err => console.log(err));
   };
 
-  if (!caseData) return <p style={{ padding: "20px" }}>Loading case...</p>;
+  // =========================
+  // LOADING
+  // =========================
+  if (loading) return <p style={{ padding: "20px" }}>Loading case...</p>;
+  if (!caseData) return <p style={{ padding: "20px" }}>Case not found</p>;
+
+  const caseHearings = allHearings
+    .filter(h => String(h.case_id) === caseId)
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
 
   return (
     <div style={{ padding: "20px", background: "#f5f6fa", minHeight: "100vh" }}>
       
       <h2>📁 Case Dashboard</h2>
-      <p style={{ color: "gray" }}>Case ID: {id}</p>
+      <p style={{ color: "gray" }}>Case ID: {caseId}</p>
 
       {/* TABS */}
-      <div style={{ display: "flex", gap: "10px", marginBottom: "20px", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
         {["view", "details", "diary", "files", "hearings"].map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
             style={{
-              padding: "8px 12px",
-              borderRadius: "8px",
-              border: "1px solid #ccc",
+              padding: "8px",
               background: tab === t ? "#4f46e5" : "white",
               color: tab === t ? "white" : "black",
-              cursor: "pointer"
+              border: "1px solid #ccc",
+              borderRadius: "8px"
             }}
           >
             {t.toUpperCase()}
@@ -120,176 +141,115 @@ function CaseDetails() {
         ))}
       </div>
 
-      {/* CARD */}
-      <div style={{
-        background: "white",
-        padding: "20px",
-        borderRadius: "12px",
-        boxShadow: "0 2px 10px rgba(0,0,0,0.08)"
-      }}>
+      <div style={{ background: "white", padding: "20px", borderRadius: "10px" }}>
 
         {/* VIEW */}
         {tab === "view" && (
           <div>
-            <h3>View / Edit Case</h3>
+            <h3>Edit Case</h3>
 
-            <input style={inputStyle}
-              value={form.title}
-              onChange={e => setForm({ ...form, title: e.target.value })}
-              placeholder="Title"
-            />
+            <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Title" />
+            <input value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} placeholder="Status" />
+            <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
 
-            <input style={inputStyle}
-              value={form.status}
-              onChange={e => setForm({ ...form, status: e.target.value })}
-              placeholder="Status"
-            />
-
-            <textarea style={textareaStyle}
-              value={form.description}
-              onChange={e => setForm({ ...form, description: e.target.value })}
-              placeholder="Description"
-            />
-
-            <button style={btnStyle} onClick={updateCase}>
-              Save Changes
-            </button>
+            <button onClick={updateCase}>Save</button>
           </div>
         )}
 
         {/* DETAILS */}
         {tab === "details" && (
-          <div>
-            <h3>📒 Case Details</h3>
-            <textarea style={{ ...textareaStyle, height: "300px" }}
-              value={form.details}
-              onChange={e => setForm({ ...form, details: e.target.value })}
-            />
-            <button style={btnStyle} onClick={updateCase}>Save Details</button>
-          </div>
+          <textarea
+            style={{ width: "100%", height: "200px" }}
+            value={form.details}
+            onChange={e => setForm({ ...form, details: e.target.value })}
+          />
         )}
 
         {/* DIARY */}
         {tab === "diary" && (
-          <div>
-            <h3>📝 Diary</h3>
-            <textarea style={{ ...textareaStyle, height: "300px" }}
-              value={form.diary}
-              onChange={e => setForm({ ...form, diary: e.target.value })}
-            />
-            <button style={btnStyle} onClick={updateCase}>Save Diary</button>
-          </div>
+          <textarea
+            style={{ width: "100%", height: "200px" }}
+            value={form.diary}
+            onChange={e => setForm({ ...form, diary: e.target.value })}
+          />
         )}
 
         {/* FILES */}
-        {tab === "files" && (
-          <div>
-            <h3>📂 Files</h3>
-            <p>File upload coming soon</p>
-          </div>
-        )}
+        {tab === "files" && <p>Files coming soon</p>}
 
-        {/* HEARINGS + ADD (🔥 NEW FULL FEATURE) */}
+        {/* =========================
+            HEARINGS (FULL FEATURE)
+        ========================= */}
         {tab === "hearings" && (
           <div>
-            <h3>⚖️ Hearing Timeline</h3>
 
-            {/* ADD HEARING FORM */}
+            <h3>⚖️ Add Hearing</h3>
+
             <div style={{
-              padding: "15px",
               border: "1px solid #ddd",
-              borderRadius: "10px",
-              marginBottom: "20px",
-              background: "#fafafa"
+              padding: "10px",
+              marginBottom: "15px",
+              borderRadius: "10px"
             }}>
-              <h4>Add Hearing</h4>
-
-              <input style={inputStyle}
-                placeholder="ID"
+              <input
+                placeholder="Hearing ID"
                 value={hearingForm.id}
                 onChange={e => setHearingForm({ ...hearingForm, id: e.target.value })}
               />
 
-              <input style={inputStyle}
+              <input
                 type="date"
                 value={hearingForm.date}
                 onChange={e => setHearingForm({ ...hearingForm, date: e.target.value })}
               />
 
-              <input style={inputStyle}
+              <input
                 placeholder="Event"
                 value={hearingForm.event}
                 onChange={e => setHearingForm({ ...hearingForm, event: e.target.value })}
               />
 
-              <input style={inputStyle}
+              <input
                 placeholder="Notes"
                 value={hearingForm.notes}
                 onChange={e => setHearingForm({ ...hearingForm, notes: e.target.value })}
               />
 
-              <button style={btnStyle} onClick={addHearing}>
+              <input
+                placeholder="Reminder"
+                value={hearingForm.reminder}
+                onChange={e => setHearingForm({ ...hearingForm, reminder: e.target.value })}
+              />
+
+              <button onClick={addHearing} style={{ marginTop: "10px" }}>
                 ➕ Add Hearing
               </button>
             </div>
 
-            {/* TIMELINE */}
-            {allHearings
-              .filter(h => h.case_id === id)
-              .length === 0 ? (
-              <p style={{ color: "gray" }}>No hearings yet</p>
+            <h3>Timeline</h3>
+
+            {caseHearings.length === 0 ? (
+              <p>No hearings yet</p>
             ) : (
-              allHearings
-                .filter(h => h.case_id === id)
-                .sort((a, b) => new Date(a.date) - new Date(b.date))
-                .map(h => (
-                  <div key={h.id} style={{
-                    background: "white",
-                    padding: "12px",
-                    marginBottom: "10px",
-                    borderRadius: "10px",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.08)"
-                  }}>
-                    <h4>⚖️ {h.event}</h4>
-                    <p><b>Date:</b> {h.date}</p>
-                    <p><b>Notes:</b> {h.notes}</p>
-                    <p style={{ fontSize: "12px", color: "gray" }}>
-                      ID: {h.id}
-                    </p>
-                  </div>
-                ))
+              caseHearings.map(h => (
+                <div key={h.id} style={{
+                  border: "1px solid #ddd",
+                  padding: "10px",
+                  marginBottom: "10px",
+                  borderRadius: "8px"
+                }}>
+                  <b>{h.event}</b>
+                  <p>Date: {h.date}</p>
+                  <p>Notes: {h.notes}</p>
+                </div>
+              ))
             )}
           </div>
         )}
+
       </div>
     </div>
   );
 }
-
-// styles
-const inputStyle = {
-  width: "100%",
-  padding: "10px",
-  marginBottom: "10px",
-  borderRadius: "8px",
-  border: "1px solid #ccc"
-};
-
-const textareaStyle = {
-  width: "100%",
-  padding: "10px",
-  marginBottom: "10px",
-  borderRadius: "8px",
-  border: "1px solid #ccc"
-};
-
-const btnStyle = {
-  padding: "10px 15px",
-  background: "#4f46e5",
-  color: "white",
-  border: "none",
-  borderRadius: "8px",
-  cursor: "pointer"
-};
 
 export default CaseDetails;
