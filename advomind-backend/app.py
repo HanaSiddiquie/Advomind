@@ -1,13 +1,32 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+import os
+from werkzeug.utils import secure_filename
+import time
+import uuid  # ✅ NEW
 
 app = Flask(__name__)
 CORS(app)
 
+# =========================
+# FILE STORAGE
+# =========================
+UPLOAD_FOLDER = "uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+
+# =========================
+# IN-MEMORY DATABASE
+# =========================
 clients = []
 cases = []
 hearings = []
 
+COURTS = ["civil", "session", "high"]
+
+# =========================
+# RESPONSE HELPER
+# =========================
 def response(message, data=None, status=200):
     return jsonify({
         "message": message,
@@ -16,37 +35,70 @@ def response(message, data=None, status=200):
 
 
 # =========================
-# CLIENTS
+# HELPERS
+# =========================
+def get_case(case_id):
+    return next((c for c in cases if c["id"] == case_id), None)
+
+def filter_cases_by_court(court):
+    if not court:
+        return cases
+    return [c for c in cases if c.get("court_type") == court]
+
+
+# =========================
+# HOME
+# =========================
+@app.route('/')
+def home():
+    return "Advomind Backend Running"
+
+
+# =========================
+# CLIENTS (AUTO ID)
 # =========================
 @app.route('/clients', methods=['GET', 'POST'])
 def clients_route():
+
     if request.method == 'GET':
-        return response("All clients", clients)
+        court = request.args.get("court")
 
-    data = request.get_json()
+        if court:
+            filtered = [c for c in clients if c.get("court_type") == court]
+            return response("Clients fetched", filtered)
+
+        return response("Clients fetched", clients)
+
+    data = request.get_json(silent=True)
+
     if not data:
-        return response("Invalid request", None, 400)
+        return response("No data received", None, 400)
 
-    required = ["id", "name", "cnic", "address", "email", "phone"]
+    # ❌ removed id from required
+    required = ["name", "cnic", "address", "email", "phone", "court_type"]
 
-    for f in required:
-        if not data.get(f):
-            return response(f"{f} required", None, 400)
+    missing = [f for f in required if not data.get(f)]
+    if missing:
+        return response(f"Missing: {missing}", None, 400)
 
-    if any(c["id"] == data["id"] for c in clients):
-        return response("Client exists", None, 400)
+    if data["court_type"] not in COURTS:
+        return response("Invalid court type", None, 400)
+
+    # ✅ AUTO ID
+    new_id = str(uuid.uuid4())
 
     client = {
-        "id": data["id"],
+        "id": new_id,
         "name": data["name"],
         "cnic": data["cnic"],
         "address": data["address"],
         "email": data["email"],
         "phone": data["phone"],
-        "cases": []
+        "court_type": data["court_type"]
     }
 
     clients.append(client)
+
     return response("Client created", client, 201)
 
 
@@ -54,13 +106,13 @@ def clients_route():
 def client_detail(client_id):
     global clients, cases, hearings
 
-    client = next((c for c in clients if c["id"] == client_id), None)
-
     if request.method == "PUT":
+        client = next((c for c in clients if c["id"] == client_id), None)
+
         if not client:
             return response("Client not found", None, 404)
 
-        data = request.get_json() or {}
+        data = request.get_json(silent=True) or {}
 
         client.update({
             "name": data.get("name", client["name"]),
@@ -73,61 +125,71 @@ def client_detail(client_id):
         return response("Client updated", client)
 
     if request.method == "DELETE":
-        clients = [c for c in clients if c["id"] != client_id]
-        cases = [c for c in cases if c["client_id"] != client_id]
-        hearings = [h for h in hearings if h["case_id"] != client_id]
+        client_cases = [c["id"] for c in cases if c["client_id"] == client_id]
+
+        clients[:] = [c for c in clients if c["id"] != client_id]
+        cases[:] = [c for c in cases if c["client_id"] != client_id]
+        hearings[:] = [h for h in hearings if h["case_id"] not in client_cases]
 
         return response("Client deleted")
 
 
 # =========================
-# CASES
+# CASES (AUTO ID)
 # =========================
 @app.route('/cases', methods=['GET', 'POST'])
 def cases_route():
+
     if request.method == 'GET':
-        return response("All cases", cases)
+        court = request.args.get("court")
+        return response("Cases fetched", filter_cases_by_court(court))
 
-    data = request.get_json()
+    data = request.get_json(silent=True)
+
     if not data:
-        return response("Invalid request", None, 400)
+        return response("No data received", None, 400)
 
-    required = ["id", "client_id", "title", "description"]
+    # ❌ removed id
+    required = ["client_id", "title", "description", "court_type"]
 
-    for f in required:
-        if not data.get(f):
-            return response(f"{f} required", None, 400)
+    missing = [f for f in required if not data.get(f)]
+    if missing:
+        return response(f"Missing fields: {missing}", None, 400)
 
-    if any(c["id"] == data["id"] for c in cases):
-        return response("Case exists", None, 400)
+    if data["court_type"] not in COURTS:
+        return response("Invalid court type", None, 400)
+
+    # ✅ AUTO ID
+    new_id = str(uuid.uuid4())
 
     case = {
-        "id": data["id"],
-        "client_id": data["client_id"],
+        "id": new_id,
+        "client_id": str(data["client_id"]),
         "title": data["title"],
         "description": data["description"],
-        "status": "Open",
+        "court_type": data["court_type"],
+        "status": data.get("status", "Open"),
         "details": "",
         "diary": "",
-        "files": [],
-        "hearings": []
+        "files": []
     }
 
     cases.append(case)
+
     return response("Case created", case, 201)
 
 
 @app.route('/cases/<case_id>', methods=['PUT', 'DELETE'])
 def case_detail(case_id):
-    global cases
+    global cases, hearings
 
-    case = next((c for c in cases if c["id"] == case_id), None)
+    case = get_case(case_id)
 
     if request.method == "PUT":
         if not case:
             return response("Case not found", None, 404)
 
-        data = request.get_json() or {}
+        data = request.get_json(silent=True) or {}
 
         case.update({
             "title": data.get("title", case["title"]),
@@ -140,38 +202,54 @@ def case_detail(case_id):
         return response("Case updated", case)
 
     if request.method == "DELETE":
-        cases = [c for c in cases if c["id"] != case_id]
+        cases[:] = [c for c in cases if c["id"] != case_id]
+        hearings[:] = [h for h in hearings if h["case_id"] != case_id]
+
         return response("Case deleted")
 
 
 # =========================
-# HEARINGS
+# HEARINGS (AUTO ID + FIXED)
 # =========================
 @app.route('/hearings', methods=['GET', 'POST'])
 def hearings_route():
+
     if request.method == 'GET':
-        return response("All hearings", hearings)
+        court = request.args.get("court")
 
-    data = request.get_json()
+        if not court:
+            return response("All hearings fetched", hearings)
+
+        filtered = [
+            h for h in hearings
+            if get_case(h["case_id"]) and get_case(h["case_id"]).get("court_type") == court
+        ]
+
+        return response("Filtered hearings", filtered)
+
+    data = request.get_json(silent=True)
+
     if not data:
-        return response("Invalid request", None, 400)
+        return response("No data received", None, 400)
 
-    required = ["id", "case_id", "date", "event"]
+    # ❌ removed id
+    required = ["case_id", "date", "event"]
 
-    for f in required:
-        if not data.get(f):
-            return response(f"{f} required", None, 400)
+    missing = [f for f in required if not data.get(f)]
+    if missing:
+        return response(f"Missing: {missing}", None, 400)
 
-    if any(h["id"] == data["id"] for h in hearings):
-        return response("Hearing exists", None, 400)
-
-    case = next((c for c in cases if c["id"] == data["case_id"]), None)
+    case = get_case(data["case_id"])
     if not case:
         return response("Case not found", None, 404)
 
+    # ✅ AUTO ID
+    new_id = str(uuid.uuid4())
+
     hearing = {
-        "id": data["id"],
-        "case_id": data["case_id"],
+        "id": new_id,
+        "case_id": str(data["case_id"]),
+        "court_type": case["court_type"],
         "date": data["date"],
         "event": data["event"],
         "notes": data.get("notes", ""),
@@ -179,14 +257,60 @@ def hearings_route():
     }
 
     hearings.append(hearing)
-    case["hearings"].append(hearing)
 
     return response("Hearing created", hearing, 201)
 
 
-@app.route('/')
-def home():
-    return "Advomind Running"
+# =========================
+# FILES (UNCHANGED)
+# =========================
+@app.route('/files', methods=['POST'])
+def upload_file():
 
+    file = request.files.get("file")
+    case_id = request.form.get("case_id")
+
+    if not file or not case_id:
+        return response("Missing file or case_id", None, 400)
+
+    case = get_case(case_id)
+    if not case:
+        return response("Case not found", None, 404)
+
+    original_name = secure_filename(file.filename)
+    unique_name = f"{case_id}_{int(time.time()*1000)}_{original_name}"
+
+    path = os.path.join(app.config["UPLOAD_FOLDER"], unique_name)
+    file.save(path)
+
+    file_data = {
+        "name": unique_name,
+        "original_name": original_name,
+        "path": path
+    }
+
+    case["files"].append(file_data)
+
+    return response("File uploaded", file_data, 201)
+
+
+@app.route('/files/<case_id>', methods=['GET'])
+def get_files(case_id):
+    case = get_case(case_id)
+
+    if not case:
+        return response("Case not found", None, 404)
+
+    return response("Files fetched", case["files"])
+
+
+@app.route('/download/<filename>')
+def download_file(filename):
+    return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
+
+
+# =========================
+# RUN
+# =========================
 if __name__ == '__main__':
     app.run(debug=True)

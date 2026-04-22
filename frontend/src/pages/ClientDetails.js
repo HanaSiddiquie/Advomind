@@ -1,6 +1,16 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import API from "../services/api";
+import { db } from "../firebase";
+import {
+  doc,
+  updateDoc,
+  addDoc,
+  getDoc,
+  collection,
+  getDocs,
+  query,
+  where
+} from "firebase/firestore";
 
 function ClientDetails() {
   const { id } = useParams();
@@ -9,103 +19,154 @@ function ClientDetails() {
   const [client, setClient] = useState(null);
   const [cases, setCases] = useState([]);
   const [hearings, setHearings] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [form, setForm] = useState({
     name: "",
     cnic: "",
     address: "",
     email: "",
-    phone: "",
-    details: ""
+    phone: ""
   });
 
   const [caseForm, setCaseForm] = useState({
-    id: "",
     title: "",
     description: ""
   });
 
   // =========================
-  // FETCH CLIENT
+  // FETCH CLIENT (FIXED)
   // =========================
-  const fetchClient = () => {
-    API.get("/clients")
-      .then(res => {
-        const found = (res.data.data || []).find(
-          c => String(c.id) === String(id)
-        );
+  const fetchClient = async () => {
+    try {
+      const ref = doc(db, "clients", id);
+      const snap = await getDoc(ref);
 
-        setClient(found || null);
+      if (snap.exists()) {
+        const data = { id: snap.id, ...snap.data() };
+        setClient(data);
 
-        if (found) {
-          setForm({
-            name: found.name || "",
-            cnic: found.cnic || "",
-            address: found.address || "",
-            email: found.email || "",
-            phone: found.phone || "",
-            details: found.details || ""
-          });
-        }
-      })
-      .catch(err => console.log(err));
+        setForm({
+          name: data.name || "",
+          cnic: data.cnic || "",
+          address: data.address || "",
+          email: data.email || "",
+          phone: data.phone || ""
+        });
+      } else {
+        setClient(null);
+      }
+    } catch (err) {
+      console.log(err);
+    }
   };
 
   // =========================
   // FETCH CASES
   // =========================
-  const fetchCases = () => {
-    API.get("/cases")
-      .then(res => setCases(res.data.data || []))
-      .catch(err => console.log(err));
+  const fetchCases = async () => {
+    try {
+      const q = query(
+        collection(db, "cases"),
+        where("client_id", "==", id)
+      );
+
+      const snap = await getDocs(q);
+
+      const data = snap.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      }));
+
+      setCases(data);
+    } catch (err) {
+      console.log(err);
+    }
   };
 
   // =========================
-  // FETCH HEARINGS (NEW)
+  // FETCH HEARINGS
   // =========================
-  const fetchHearings = () => {
-    API.get("/hearings")
-      .then(res => setHearings(res.data.data || []))
-      .catch(err => console.log(err));
+  const fetchHearings = async () => {
+    try {
+      const snap = await getDocs(collection(db, "hearings"));
+
+      const data = snap.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      }));
+
+      setHearings(data);
+    } catch (err) {
+      console.log(err);
+    }
   };
 
+  // =========================
+  // INIT
+  // =========================
   useEffect(() => {
-    fetchClient();
-    fetchCases();
-    fetchHearings();
+    const load = async () => {
+      setLoading(true);
+      await Promise.all([fetchClient(), fetchCases(), fetchHearings()]);
+      setLoading(false);
+    };
+
+    load();
   }, [id]);
 
   // =========================
   // UPDATE CLIENT
   // =========================
-  const updateClient = () => {
-    API.put(`/clients/${id}`, form)
-      .then(fetchClient)
-      .catch(err => console.log(err));
+  const updateClient = async () => {
+    try {
+      const ref = doc(db, "clients", id);
+      await fetchClient();
+      await updateDoc(ref, form);
+      fetchClient();
+    } catch (err) {
+      console.log(err);
+    }
   };
 
   // =========================
   // ADD CASE
   // =========================
-  const addCase = () => {
-    API.post("/cases", {
-      ...caseForm,
-      client_id: id
-    })
-      .then(() => {
-        setCaseForm({ id: "", title: "", description: "" });
-        fetchCases();
-      })
-      .catch(err => console.log(err));
+  const addCase = async () => {
+    try {
+      const court = localStorage.getItem("court");
+
+      if (!caseForm.title || !caseForm.description) {
+        alert("Fill all case fields");
+        return;
+      }
+
+      await addDoc(collection(db, "cases"), {
+        client_id: id,
+        title: caseForm.title,
+        description: caseForm.description,
+        status: "Open",
+        court_type: court
+      });
+
+      setCaseForm({ title: "", description: "" });
+      fetchCases();
+
+    } catch (err) {
+      console.log(err);
+    }
   };
 
-  if (!client) {
-    return <p style={{ padding: "20px" }}>Loading client...</p>;
-  }
+  // =========================
+  // LOADING FIX
+  // =========================
+  if (loading) return <p style={{ padding: "20px" }}>Loading client...</p>;
+  if (!client) return <p style={{ padding: "20px" }}>Client not found</p>;
 
-  const clientCases = cases.filter(
-    c => String(c.client_id) === String(id)
-  );
+  // =========================
+  // FILTERS
+  // =========================
+  const clientCases = cases;
 
   const clientCaseIds = clientCases.map(c => c.id);
 
@@ -115,13 +176,10 @@ function ClientDetails() {
 
   return (
     <div style={{ padding: "20px", background: "#f5f6fa", minHeight: "100vh" }}>
-      
-      <h2>👤 Client Dashboard</h2>
-      <p style={{ color: "gray" }}>Client ID: {id}</p>
 
-      {/* =========================
-          CLIENT INFO
-      ========================= */}
+      <h2>👤 Client Dashboard</h2>
+
+      {/* CLIENT INFO */}
       <div style={card}>
         <h3>Client Info</h3>
 
@@ -140,22 +198,24 @@ function ClientDetails() {
           placeholder="Address"
         />
 
+        <input style={input} value={form.email}
+          onChange={e => setForm({ ...form, email: e.target.value })}
+          placeholder="Email"
+        />
+
+        <input style={input} value={form.phone}
+          onChange={e => setForm({ ...form, phone: e.target.value })}
+          placeholder="Phone"
+        />
+
         <button style={btn} onClick={updateClient}>
           Save
         </button>
       </div>
 
-      {/* =========================
-          ADD CASE
-      ========================= */}
+      {/* ADD CASE */}
       <div style={card}>
         <h3>➕ Add Case</h3>
-
-        <input style={input}
-          value={caseForm.id}
-          onChange={e => setCaseForm({ ...caseForm, id: e.target.value })}
-          placeholder="Case ID"
-        />
 
         <input style={input}
           value={caseForm.title}
@@ -174,9 +234,7 @@ function ClientDetails() {
         </button>
       </div>
 
-      {/* =========================
-          CASES
-      ========================= */}
+      {/* CASES */}
       <div style={card}>
         <h3>⚖️ Cases</h3>
 
@@ -194,40 +252,33 @@ function ClientDetails() {
         </div>
       </div>
 
-      {/* =========================
-          HEARING SUMMARY (NEW)
-      ========================= */}
+      {/* HEARINGS */}
       <div style={card}>
-        <h3>📅 Hearing Summary</h3>
+        <h3>📅 Hearings</h3>
 
         {clientHearings.length === 0 ? (
-          <p>No hearings scheduled</p>
+          <p>No hearings</p>
         ) : (
-          clientHearings.map(h => (
-            <div key={h.id} style={hearingCard}>
+          clientHearings.map((h, i) => (
+            <div key={h.id || i} style={hearingCard}>
               <h4>{h.event}</h4>
-              <p><b>Date:</b> {h.date}</p>
-              <p><b>Notes:</b> {h.notes}</p>
-              <p style={{ fontSize: "12px", color: "gray" }}>
-                Case ID: {h.case_id}
-              </p>
+              <p>{h.date}</p>
             </div>
           ))
         )}
       </div>
+
     </div>
   );
 }
 
-// =========================
-// STYLES
-// =========================
+/* STYLES (same) */
+
 const card = {
   background: "white",
   padding: "15px",
   marginBottom: "15px",
-  borderRadius: "12px",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.08)"
+  borderRadius: "12px"
 };
 
 const input = {
@@ -243,8 +294,7 @@ const btn = {
   background: "#4f46e5",
   color: "white",
   border: "none",
-  borderRadius: "8px",
-  cursor: "pointer"
+  borderRadius: "8px"
 };
 
 const grid = {
@@ -257,16 +307,14 @@ const caseCard = {
   background: "#f9f9f9",
   padding: "10px",
   borderRadius: "10px",
-  cursor: "pointer",
-  border: "1px solid #ddd"
+  cursor: "pointer"
 };
 
 const hearingCard = {
   background: "#eef2ff",
   padding: "10px",
   marginBottom: "10px",
-  borderRadius: "10px",
-  borderLeft: "4px solid #4f46e5"
+  borderRadius: "10px"
 };
 
 export default ClientDetails;
