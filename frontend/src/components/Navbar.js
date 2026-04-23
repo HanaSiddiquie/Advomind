@@ -19,6 +19,7 @@ function Navbar() {
       {/* LEFT: BRAND */}
       <div style={left}>
         <h2 style={{ margin: 0, color: "white" }}>⚖️ ADVOMIND</h2>
+
         {court && (
           <span style={courtTag}>
             🏛 {court.toUpperCase()}
@@ -36,9 +37,20 @@ function Navbar() {
 
       {/* RIGHT */}
       <div style={right}>
+
+        {/* SWITCH COURT BUTTON */}
+        <button
+          onClick={() => navigate("/courtselector")}
+          style={switchBtn}
+        >
+          Switch Court
+        </button>
+
+        {/* LOGOUT */}
         <button onClick={logout} style={btn}>
           Logout
         </button>
+
       </div>
 
     </div>
@@ -46,7 +58,7 @@ function Navbar() {
 }
 
 /* =========================
-   STYLES (TOP BAR)
+   STYLES (UNCHANGED THEME)
 ========================= */
 
 const nav = {
@@ -73,7 +85,8 @@ const center = {
 };
 
 const right = {
-  display: "flex"
+  display: "flex",
+  gap: "10px"
 };
 
 const link = {
@@ -82,6 +95,15 @@ const link = {
   padding: "8px 12px",
   borderRadius: "6px",
   background: "#222"
+};
+
+const switchBtn = {
+  padding: "8px 14px",
+  background: "#222",
+  color: "white",
+  border: "none",
+  borderRadius: "6px",
+  cursor: "pointer"
 };
 
 const btn = {
