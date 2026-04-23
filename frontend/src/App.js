@@ -5,6 +5,9 @@ import { auth } from "./firebase";
 
 import Navbar from "./components/Navbar";
 
+import IntroPage from "./pages/IntroPage";
+import Auth from "./pages/Auth";
+
 import CourtSelector from "./pages/CourtSelector";
 import Dashboard from "./pages/Dashboard";
 
@@ -19,8 +22,6 @@ import HearingDetails from "./pages/HearingDetails";
 
 import HearingsDashboard from "./pages/HearingsDashboard";
 
-import Auth from "./pages/Auth"; // ✅ NEW (combined login + signup)
-
 // =====================
 // PROTECTED ROUTE
 // =====================
@@ -28,7 +29,6 @@ function Protected({ user, children }) {
   const court = localStorage.getItem("court");
 
   if (!user) return <Navigate to="/auth" replace />;
-
   if (!court) return <Navigate to="/court-selector" replace />;
 
   return (
@@ -69,9 +69,12 @@ export default function App() {
     <BrowserRouter>
       <Routes>
 
-        {/* ROOT */}
+        {/* ✅ INTRO PAGE */}
+        <Route path="/" element={<IntroPage />} />
+
+        {/* ✅ AFTER INTRO → DECIDE BASED ON USER */}
         <Route
-          path="/"
+          path="/home"
           element={
             user
               ? <Navigate to="/court-selector" replace />
@@ -79,7 +82,7 @@ export default function App() {
           }
         />
 
-        {/* AUTH (LOGIN + SIGNUP TOGETHER) */}
+        {/* AUTH */}
         <Route
           path="/auth"
           element={

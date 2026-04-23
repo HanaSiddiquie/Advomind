@@ -1,20 +1,35 @@
-import { Link } from "react-router-dom";
+import Navbar from "./Navbar";
 
-function Navbar() {
+function Layout({ children }) {
   return (
-    <div style={{
-      display: "flex",
-      gap: "20px",
-      padding: "15px",
-      background: "#111",
-      color: "white"
-    }}>
-      <Link to="/" style={{ color: "white" }}>Dashboard</Link>
-      <Link to="/clients" style={{ color: "white" }}>Clients</Link>
-      <Link to="/cases" style={{ color: "white" }}>Cases</Link>
-      <Link to="/hearings" style={{ color: "white" }}>Hearings</Link>
+    <div style={wrapper}>
+      <div style={sidebar}>
+        <Navbar />
+      </div>
+
+      <div style={main}>
+        {children}
+      </div>
     </div>
   );
 }
 
-export default Navbar;
+const wrapper = {
+  display: "flex",
+  minHeight: "100vh"
+};
+
+const sidebar = {
+  width: "240px",
+  flexShrink: 0,
+  background: "#111",
+  height: "100vh"
+};
+
+const main = {
+  flex: 1,
+  padding: "20px",
+  background: "#f5f6fa"
+};
+
+export default Layout;

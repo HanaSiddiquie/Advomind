@@ -18,7 +18,6 @@ function Cases() {
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
-
   const court = localStorage.getItem("court");
 
   const [form, setForm] = useState({
@@ -29,7 +28,7 @@ function Cases() {
   });
 
   // =========================
-  // FETCH DATA (COURT FIXED)
+  // FETCH DATA
   // =========================
   const fetchData = async () => {
     setLoading(true);
@@ -37,37 +36,19 @@ function Cases() {
     try {
       if (!court) return;
 
-      // CASES (COURT FILTER)
-      const caseQuery = query(
-        collection(db, "cases"),
-        where("court_type", "==", court)
+      const caseSnap = await getDocs(
+        query(collection(db, "cases"), where("court_type", "==", court))
       );
 
-      const caseSnap = await getDocs(caseQuery);
-
-      const caseData = caseSnap.docs.map((d) => ({
-        id: d.id,
-        ...d.data()
-      }));
-
-      // CLIENTS (COURT FILTER)
-      const clientQuery = query(
-        collection(db, "clients"),
-        where("court_type", "==", court)
+      const clientSnap = await getDocs(
+        query(collection(db, "clients"), where("court_type", "==", court))
       );
 
-      const clientSnap = await getDocs(clientQuery);
-
-      const clientData = clientSnap.docs.map((d) => ({
-        id: d.id,
-        ...d.data()
-      }));
-
-      setCases(caseData);
-      setClients(clientData);
+      setCases(caseSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setClients(clientSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
     } catch (err) {
-      console.log("FETCH ERROR:", err);
+      console.log(err);
     }
 
     setLoading(false);
@@ -78,80 +59,51 @@ function Cases() {
   }, [court]);
 
   // =========================
-  // DELETE CASE
+  // DELETE
   // =========================
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this case?")) return;
-
-    try {
-      await deleteDoc(doc(db, "cases", id));
-      fetchData();
-    } catch (err) {
-      console.log(err);
-    }
+    await deleteDoc(doc(db, "cases", id));
+    fetchData();
   };
 
   // =========================
-  // INPUT
-  // =========================
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
-  // =========================
-  // SUBMIT CASE
+  // SUBMIT
   // =========================
   const handleSubmit = async () => {
-    try {
-      if (!court) {
-        alert("Select court first");
-        return;
-      }
+    if (!form.client_id || !form.title || !form.description) return;
 
-      if (!form.client_id || !form.title || !form.description) {
-        alert("Fill all fields");
-        return;
-      }
+    await addDoc(collection(db, "cases"), {
+      ...form,
+      court_type: court
+    });
 
-      await addDoc(collection(db, "cases"), {
-        ...form,
-        court_type: court
-      });
+    setForm({
+      client_id: "",
+      title: "",
+      description: "",
+      status: "Open"
+    });
 
-      setForm({
-        client_id: "",
-        title: "",
-        description: "",
-        status: "Open"
-      });
-
-      fetchData();
-
-    } catch (err) {
-      console.log("SUBMIT ERROR:", err);
-    }
+    fetchData();
   };
 
-  // =========================
-  // HELPERS
-  // =========================
   const getClientName = (id) => {
-    const c = clients.find((x) => x.id === id);
+    const c = clients.find(x => x.id === id);
     return c ? c.name : "Unknown Client";
   };
 
-  // =========================
-  // SEARCH
-  // =========================
-  const filteredCases = cases.filter((c) =>
+  const filteredCases = cases.filter(c =>
     c.title?.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
-    <div style={{ padding: "20px", background: "#f5f6fa", minHeight: "100vh" }}>
+    <div style={page}>
 
-      <h2>📁 Cases ({court?.toUpperCase()})</h2>
+      <h2 style={title}>📁 Cases</h2>
+      <p style={subtitle}>Court: {court?.toUpperCase()}</p>
 
+      {/* SEARCH */}
       <input
         style={searchBar}
         placeholder="Search cases..."
@@ -159,18 +111,20 @@ function Cases() {
         onChange={(e) => setSearch(e.target.value)}
       />
 
-      {/* FORM */}
-      <div style={formBox}>
-        <h3>Add Case</h3>
+      {/* =========================
+          ADD CASE CARD (IMPROVED)
+      ========================= */}
+      <div style={formCard}>
+        <h3 style={cardTitle}>➕ Create New Case</h3>
 
         <select
           style={input}
           name="client_id"
           value={form.client_id}
-          onChange={handleChange}
+          onChange={(e) => setForm({ ...form, client_id: e.target.value })}
         >
           <option value="">Select Client</option>
-          {clients.map((c) => (
+          {clients.map(c => (
             <option key={c.id} value={c.id}>
               {c.name} — {c.cnic}
             </option>
@@ -179,42 +133,45 @@ function Cases() {
 
         <input
           style={input}
-          name="title"
+          placeholder="Case Title"
           value={form.title}
-          onChange={handleChange}
-          placeholder="Title"
+          onChange={(e) => setForm({ ...form, title: e.target.value })}
         />
 
-        <input
-          style={input}
-          name="description"
+        <textarea
+          style={textarea}
+          placeholder="Case Description"
           value={form.description}
-          onChange={handleChange}
-          placeholder="Description"
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
         />
 
-        <button onClick={handleSubmit} style={btn}>
-          ➕ Add Case
+        <button style={btn} onClick={handleSubmit}>
+          Create Case
         </button>
       </div>
 
-      {loading && <p>Loading...</p>}
+      {loading && <p style={{ color: "#666" }}>Loading...</p>}
 
-      {/* LIST */}
+      {/* =========================
+          CASE LIST
+      ========================= */}
       <div style={grid}>
-        {filteredCases.map((c) => (
+        {filteredCases.map(c => (
           <div key={c.id} style={card}>
 
             <div onClick={() => navigate(`/cases/${c.id}`)}>
-              <h3>{c.title}</h3>
-              <p><b>Client:</b> {getClientName(c.client_id)}</p>
-              <p><b>Status:</b> {c.status}</p>
-              <p style={{ fontSize: "12px", color: "gray" }}>
-                Court: {c.court_type}
+              <h3 style={{ marginBottom: "5px" }}>{c.title}</h3>
+
+              <p style={meta}>
+                <b>Client:</b> {getClientName(c.client_id)}
+              </p>
+
+              <p style={meta}>
+                <b>Status:</b> {c.status}
               </p>
             </div>
 
-            <button onClick={() => handleDelete(c.id)} style={deleteBtn}>
+            <button style={deleteBtn} onClick={() => handleDelete(c.id)}>
               Delete
             </button>
 
@@ -225,37 +182,72 @@ function Cases() {
   );
 }
 
-/* STYLES */
-const searchBar = {
-  width: "100%",
-  padding: "10px",
-  marginBottom: "15px",
-  border: "1px solid #ddd",
-  borderRadius: "8px"
+/* =========================
+   THEME STYLES (CLEAN UI)
+========================= */
+
+const page = {
+  padding: "25px",
+  background: "#f4f5f7",
+  minHeight: "100vh"
 };
 
-const formBox = {
-  background: "white",
-  padding: "15px",
+const title = {
+  marginBottom: "5px",
+  color: "#111"
+};
+
+const subtitle = {
+  marginBottom: "15px",
+  color: "#666"
+};
+
+const searchBar = {
+  width: "100%",
+  padding: "12px",
+  marginBottom: "20px",
   borderRadius: "10px",
-  marginBottom: "20px"
+  border: "1px solid #ddd"
+};
+
+const formCard = {
+  background: "#ffffff",
+  padding: "20px",
+  borderRadius: "14px",
+  marginBottom: "25px",
+  boxShadow: "0 2px 10px rgba(0,0,0,0.06)"
+};
+
+const cardTitle = {
+  marginBottom: "15px",
+  color: "#111"
 };
 
 const input = {
   width: "100%",
   padding: "10px",
   marginBottom: "10px",
-  border: "1px solid #ddd",
-  borderRadius: "8px"
+  borderRadius: "8px",
+  border: "1px solid #ddd"
+};
+
+const textarea = {
+  width: "100%",
+  height: "80px",
+  padding: "10px",
+  marginBottom: "10px",
+  borderRadius: "8px",
+  border: "1px solid #ddd"
 };
 
 const btn = {
+  width: "100%",
   padding: "10px",
-  background: "#4f46e5",
+  background: "#1f2937",
   color: "white",
   border: "none",
-  borderRadius: "8px",
-  width: "100%"
+  borderRadius: "10px",
+  cursor: "pointer"
 };
 
 const grid = {
@@ -265,17 +257,24 @@ const grid = {
 };
 
 const card = {
-  background: "white",
+  background: "#fff",
   padding: "15px",
-  borderRadius: "10px",
+  borderRadius: "12px",
+  border: "1px solid #eee",
   cursor: "pointer"
+};
+
+const meta = {
+  color: "#666",
+  fontSize: "14px",
+  margin: "4px 0"
 };
 
 const deleteBtn = {
   marginTop: "10px",
   width: "100%",
   padding: "8px",
-  background: "red",
+  background: "#ef4444",
   color: "white",
   border: "none",
   borderRadius: "8px"

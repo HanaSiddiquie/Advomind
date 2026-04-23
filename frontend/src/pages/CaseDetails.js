@@ -49,72 +49,35 @@ function CaseDetails() {
     notes: ""
   });
 
-  // =========================
-  // FETCH CASE
-  // =========================
   const fetchCase = async () => {
     setLoading(true);
+    const snap = await getDoc(doc(db, "cases", caseId));
 
-    try {
-      const snap = await getDoc(doc(db, "cases", caseId));
+    if (snap.exists()) {
+      const data = snap.data();
+      setCaseData(data);
 
-      if (snap.exists()) {
-        const data = snap.data();
-        setCaseData(data);
-
-        setForm({
-          title: data.title || "",
-          description: data.description || "",
-          status: data.status || "",
-          details: data.details || "",
-          diary: data.diary || ""
-        });
-      } else {
-        setCaseData(null);
-      }
-    } catch (err) {
-      console.log(err);
+      setForm({
+        title: data.title || "",
+        description: data.description || "",
+        status: data.status || "",
+        details: data.details || "",
+        diary: data.diary || ""
+      });
     }
-
     setLoading(false);
   };
 
-  // =========================
-  // FETCH HEARINGS
-  // =========================
   const fetchHearings = async () => {
-    const q = query(
-      collection(db, "hearings"),
-      where("case_id", "==", caseId)
-    );
-
+    const q = query(collection(db, "hearings"), where("case_id", "==", caseId));
     const snap = await getDocs(q);
-
-    const data = snap.docs.map(d => ({
-      id: d.id,
-      ...d.data()
-    }));
-
-    setAllHearings(data);
+    setAllHearings(snap.docs.map(d => ({ id: d.id, ...d.data() })));
   };
 
-  // =========================
-  // FETCH FILES
-  // =========================
   const fetchFiles = async () => {
-    const q = query(
-      collection(db, "files"),
-      where("case_id", "==", caseId)
-    );
-
+    const q = query(collection(db, "files"), where("case_id", "==", caseId));
     const snap = await getDocs(q);
-
-    const data = snap.docs.map(d => ({
-      id: d.id,
-      ...d.data()
-    }));
-
-    setFiles(data);
+    setFiles(snap.docs.map(d => ({ id: d.id, ...d.data() })));
   };
 
   useEffect(() => {
@@ -123,17 +86,11 @@ function CaseDetails() {
     fetchFiles();
   }, [caseId]);
 
-  // =========================
-  // UPDATE CASE
-  // =========================
   const updateCase = async () => {
     await updateDoc(doc(db, "cases", caseId), form);
     fetchCase();
   };
 
-  // =========================
-  // ADD HEARING
-  // =========================
   const addHearing = async () => {
     if (!hearingForm.date || !hearingForm.event) return;
 
@@ -148,67 +105,47 @@ function CaseDetails() {
     fetchHearings();
   };
 
-  // =========================
-  // FILE UPLOAD (FIREBASE STORAGE FIX)
-  // =========================
   const uploadFile = async () => {
     if (!file) return;
 
     setUploading(true);
 
-    try {
-      const fileRef = ref(storage, `cases/${caseId}/${file.name}`);
+    const fileRef = ref(storage, `cases/${caseId}/${file.name}`);
+    await uploadBytes(fileRef, file);
+    const url = await getDownloadURL(fileRef);
 
-      await uploadBytes(fileRef, file);
-      const url = await getDownloadURL(fileRef);
+    await addDoc(collection(db, "files"), {
+      case_id: caseId,
+      name: file.name,
+      url
+    });
 
-      await addDoc(collection(db, "files"), {
-        case_id: caseId,
-        name: file.name,
-        url: url,
-        createdAt: new Date()
-      });
-
-      setFile(null);
-      fetchFiles();
-    } catch (err) {
-      console.log(err);
-      alert("Upload failed");
-    }
-
+    setFile(null);
     setUploading(false);
+    fetchFiles();
   };
 
-  // =========================
-  // DELETE FILE
-  // =========================
-  const deleteFile = async (fileItem) => {
-    try {
-      const fileRef = ref(storage, `cases/${caseId}/${fileItem.name}`);
-
-      await deleteObject(fileRef);
-      await deleteDoc(doc(db, "files", fileItem.id));
-
-      fetchFiles();
-    } catch (err) {
-      console.log(err);
-    }
+  const deleteFile = async (f) => {
+    const fileRef = ref(storage, `cases/${caseId}/${f.name}`);
+    await deleteObject(fileRef);
+    await deleteDoc(doc(db, "files", f.id));
+    fetchFiles();
   };
 
   const caseHearings = [...allHearings].sort(
     (a, b) => new Date(a.date) - new Date(b.date)
   );
 
-  if (loading) return <p style={{ padding: 20 }}>Loading case...</p>;
-  if (!caseData) return <p style={{ padding: 20 }}>Case not found</p>;
+  if (loading) return <div style={page}>Loading...</div>;
+  if (!caseData) return <div style={page}>Case not found</div>;
 
   return (
-    <div style={{ padding: "20px", background: "#f5f6fa", minHeight: "100vh" }}>
+    <div style={page}>
 
-      <h2>📁 Case Dashboard</h2>
+      <h2 style={title}>Case Dashboard</h2>
 
       {/* TABS */}
-      <div style={tabBar}>
+      <div style={tabs}>
         {["view", "details", "diary", "files", "hearings"].map(t => (
           <button
             key={t}
@@ -220,86 +157,84 @@ function CaseDetails() {
         ))}
       </div>
 
+      {/* CARD */}
       <div style={card}>
 
         {/* VIEW */}
         {tab === "view" && (
-          <div>
-            <h3>Edit Case</h3>
+          <div style={section}>
+            <h3 style={heading}>Edit Case</h3>
 
             <input style={input}
+              placeholder="Title"
               value={form.title}
               onChange={e => setForm({ ...form, title: e.target.value })}
-              placeholder="Title"
             />
 
             <input style={input}
+              placeholder="Status"
               value={form.status}
               onChange={e => setForm({ ...form, status: e.target.value })}
-              placeholder="Status"
             />
 
             <textarea style={textarea}
+              placeholder="Description"
               value={form.description}
               onChange={e => setForm({ ...form, description: e.target.value })}
-              placeholder="Description"
             />
 
-            <button style={btn} onClick={updateCase}>💾 Save</button>
+            <button style={btn} onClick={updateCase}>Save Changes</button>
           </div>
         )}
 
         {/* DETAILS */}
         {tab === "details" && (
-          <div>
-            <h3>📝 Case Details</h3>
-            <textarea style={notesArea}
+          <div style={section}>
+            <h3 style={heading}>Case Details</h3>
+            <textarea style={bigTextarea}
               value={form.details}
               onChange={e => setForm({ ...form, details: e.target.value })}
             />
-            <button style={btn} onClick={updateCase}>💾 Save</button>
+            <button style={btn} onClick={updateCase}>Save</button>
           </div>
         )}
 
         {/* DIARY */}
         {tab === "diary" && (
-          <div>
-            <h3>📓 Case Diary</h3>
-            <textarea style={notesArea}
+          <div style={section}>
+            <h3 style={heading}>Case Diary</h3>
+            <textarea style={bigTextarea}
               value={form.diary}
               onChange={e => setForm({ ...form, diary: e.target.value })}
             />
-            <button style={btn} onClick={updateCase}>💾 Save</button>
+            <button style={btn} onClick={updateCase}>Save</button>
           </div>
         )}
 
-        {/* FILES (NOW WORKING) */}
+        {/* FILES */}
         {tab === "files" && (
-          <div>
-            <h3>📎 Case Files</h3>
+          <div style={section}>
+            <h3 style={heading}>Files</h3>
 
-            <input type="file" onChange={(e) => setFile(e.target.files[0])} />
+            <input type="file" onChange={e => setFile(e.target.files[0])} />
 
-            <button
-              style={btn}
-              onClick={uploadFile}
-              disabled={!file || uploading}
-            >
+            <button style={btn} onClick={uploadFile}>
               {uploading ? "Uploading..." : "Upload File"}
             </button>
 
-            <div style={{ marginTop: 20 }}>
+            <div style={list}>
               {files.map(f => (
-                <div key={f.id} style={timelineCard}>
-                  <p><b>{f.name}</b></p>
-                  <a href={f.url} target="_blank" rel="noreferrer">Download</a>
+                <div key={f.id} style={item}>
+                  <span>{f.name}</span>
 
-                  <button
-                    onClick={() => deleteFile(f)}
-                    style={{ marginLeft: 10, color: "red" }}
-                  >
-                    Delete
-                  </button>
+                  <div style={{ display: "flex", gap: "10px" }}>
+                    <a href={f.url} target="_blank" style={link}>
+                      Open
+                    </a>
+                    <button onClick={() => deleteFile(f)} style={danger}>
+                      Delete
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -308,38 +243,41 @@ function CaseDetails() {
 
         {/* HEARINGS */}
         {tab === "hearings" && (
-          <div>
-            <h3>⚖️ Add Hearing</h3>
+          <div style={section}>
+            <h3 style={heading}>Add Hearing</h3>
 
-            <input style={input}
-              type="date"
+            <input style={input} type="date"
               value={hearingForm.date}
               onChange={e => setHearingForm({ ...hearingForm, date: e.target.value })}
             />
 
-            <input style={input}
-              placeholder="Event"
+            <input style={input} placeholder="Event"
               value={hearingForm.event}
               onChange={e => setHearingForm({ ...hearingForm, event: e.target.value })}
             />
 
-            <input style={input}
-              placeholder="Notes"
+            <input style={input} placeholder="Notes"
               value={hearingForm.notes}
               onChange={e => setHearingForm({ ...hearingForm, notes: e.target.value })}
             />
 
-            <button style={btn} onClick={addHearing}>➕ Add Hearing</button>
+            <button style={btn} onClick={addHearing}>Add Hearing</button>
 
-            <h3>Timeline</h3>
+            <h3 style={heading}>Timeline</h3>
 
-            {caseHearings.map(h => (
-              <div key={h.id} style={timelineCard}>
-                <b>{h.event}</b>
-                <p>{h.date}</p>
-                <p>{h.notes}</p>
-              </div>
-            ))}
+            <div style={list}>
+              {caseHearings.map(h => (
+                <div key={h.id} style={item}>
+                  <div>
+                    <b>{h.event}</b>
+                    <div style={{ fontSize: "12px", color: "#666" }}>
+                      {h.date}
+                    </div>
+                    <div>{h.notes}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -348,15 +286,119 @@ function CaseDetails() {
   );
 }
 
-/* styles unchanged */
-const tabBar = { display: "flex", gap: "10px", marginBottom: "20px", flexWrap: "wrap" };
-const tabBtn = { padding: "10px", background: "#fff", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer" };
-const activeTab = { ...tabBtn, background: "#4f46e5", color: "white" };
-const card = { background: "white", padding: "20px", borderRadius: "12px" };
-const input = { width: "100%", padding: "10px", marginBottom: "10px" };
-const textarea = { width: "100%", height: "120px", marginBottom: "10px" };
-const notesArea = { width: "100%", height: "250px", padding: "15px", marginBottom: "10px" };
-const btn = { padding: "10px", background: "#4f46e5", color: "white", border: "none", borderRadius: "8px" };
-const timelineCard = { padding: "10px", border: "1px solid #ddd", marginBottom: "10px" };
+/* ================= THEME (GREY / BLACK / WHITE CLEAN UI) ================= */
+
+const page = {
+  padding: "20px",
+  minHeight: "100vh",
+  background: "#f5f6fa",
+  color: "#111"
+};
+
+const title = {
+  marginBottom: "15px",
+  fontWeight: "600"
+};
+
+const tabs = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap",
+  marginBottom: "20px"
+};
+
+const tabBtn = {
+  padding: "10px 14px",
+  background: "#fff",
+  border: "1px solid #ddd",
+  borderRadius: "8px",
+  cursor: "pointer",
+  color: "#333"
+};
+
+const activeTab = {
+  ...tabBtn,
+  background: "#111",
+  color: "#fff",
+  border: "1px solid #111"
+};
+
+const card = {
+  background: "#fff",
+  padding: "20px",
+  borderRadius: "12px",
+  border: "1px solid #e5e7eb"
+};
+
+const section = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "10px"
+};
+
+const heading = {
+  fontWeight: "600",
+  color: "#111"
+};
+
+const input = {
+  width: "100%",
+  padding: "10px",
+  borderRadius: "8px",
+  border: "1px solid #ddd",
+  outline: "none"
+};
+
+const textarea = {
+  ...input,
+  height: "120px",
+  resize: "none"
+};
+
+const bigTextarea = {
+  ...input,
+  height: "200px",
+  resize: "none"
+};
+
+const btn = {
+  padding: "10px",
+  background: "#111",
+  color: "#fff",
+  border: "none",
+  borderRadius: "8px",
+  cursor: "pointer"
+};
+
+const list = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "10px",
+  marginTop: "10px"
+};
+
+const item = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  padding: "12px",
+  background: "#fafafa",
+  border: "1px solid #eee",
+  borderRadius: "10px"
+};
+
+const danger = {
+  background: "#111",
+  color: "#fff",
+  border: "none",
+  padding: "6px 10px",
+  borderRadius: "6px",
+  cursor: "pointer"
+};
+
+const link = {
+  color: "#111",
+  textDecoration: "underline"
+};
 
 export default CaseDetails;

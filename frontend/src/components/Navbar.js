@@ -5,80 +5,100 @@ import { auth } from "../firebase";
 function Navbar() {
   const navigate = useNavigate();
 
-  const court = localStorage.getItem("court");
-
-  const handleLogout = async () => {
+  const logout = async () => {
     await signOut(auth);
     localStorage.removeItem("court");
-    navigate("/login");
+    navigate("/auth");
   };
 
-  const changeCourt = () => {
-    localStorage.removeItem("court");
-    navigate("/court-selector");
-  };
+  const court = localStorage.getItem("court");
 
   return (
-    <div style={{
-      display: "flex",
-      alignItems: "center",
-      gap: "20px",
-      padding: "15px",
-      background: "#111",
-      color: "white"
-    }}>
+    <div style={nav}>
 
-      <Link to="/dashboard" style={{ color: "white" }}>Dashboard</Link>
-      <Link to="/clients" style={{ color: "white" }}>Clients</Link>
-      <Link to="/cases" style={{ color: "white" }}>Cases</Link>
-      <Link to="/hearings" style={{ color: "white" }}>Hearings</Link>
-
-      {/* spacer */}
-      <div style={{ flex: 1 }} />
-
-      {/* 🏛 CURRENT COURT DISPLAY */}
-      <div style={{
-        fontSize: "14px",
-        color: "#cbd5e1",
-        marginRight: "10px"
-      }}>
-        🏛 Current Court: <b style={{ color: "white" }}>
-          {court ? court.toUpperCase() : "NOT SELECTED"}
-        </b>
+      {/* LEFT: BRAND */}
+      <div style={left}>
+        <h2 style={{ margin: 0, color: "white" }}>⚖️ ADVOMIND</h2>
+        {court && (
+          <span style={courtTag}>
+            🏛 {court.toUpperCase()}
+          </span>
+        )}
       </div>
 
-      {/* Change Court */}
-      <button
-        onClick={changeCourt}
-        style={{
-          background: "transparent",
-          color: "#ccc",
-          border: "1px solid #555",
-          padding: "6px 10px",
-          borderRadius: "6px",
-          cursor: "pointer"
-        }}
-      >
-        Change Court
-      </button>
+      {/* CENTER LINKS */}
+      <div style={center}>
+        <Link to="/dashboard" style={link}>Dashboard</Link>
+        <Link to="/clients" style={link}>Clients</Link>
+        <Link to="/cases" style={link}>Cases</Link>
+        <Link to="/hearings" style={link}>Hearings</Link>
+      </div>
 
-      {/* Logout */}
-      <button
-        onClick={handleLogout}
-        style={{
-          background: "#ef4444",
-          color: "white",
-          border: "none",
-          padding: "6px 12px",
-          borderRadius: "6px",
-          cursor: "pointer"
-        }}
-      >
-        Logout
-      </button>
+      {/* RIGHT */}
+      <div style={right}>
+        <button onClick={logout} style={btn}>
+          Logout
+        </button>
+      </div>
 
     </div>
   );
 }
+
+/* =========================
+   STYLES (TOP BAR)
+========================= */
+
+const nav = {
+  position: "sticky",
+  top: 0,
+  zIndex: 1000,
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  padding: "12px 20px",
+  background: "#111",
+  color: "white"
+};
+
+const left = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px"
+};
+
+const center = {
+  display: "flex",
+  gap: "15px"
+};
+
+const right = {
+  display: "flex"
+};
+
+const link = {
+  color: "white",
+  textDecoration: "none",
+  padding: "8px 12px",
+  borderRadius: "6px",
+  background: "#222"
+};
+
+const btn = {
+  padding: "8px 14px",
+  background: "red",
+  color: "white",
+  border: "none",
+  borderRadius: "6px",
+  cursor: "pointer"
+};
+
+const courtTag = {
+  fontSize: "12px",
+  padding: "4px 8px",
+  background: "#333",
+  borderRadius: "6px",
+  color: "#aaa"
+};
 
 export default Navbar;

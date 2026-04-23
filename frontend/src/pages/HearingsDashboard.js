@@ -5,6 +5,7 @@ import API from "../services/api";
 function HearingsDashboard() {
   const [hearings, setHearings] = useState([]);
   const [cases, setCases] = useState([]);
+  const [clients, setClients] = useState([]);
   const navigate = useNavigate();
 
   // =========================
@@ -12,13 +13,15 @@ function HearingsDashboard() {
   // =========================
   const fetchData = async () => {
     try {
-      const [hRes, cRes] = await Promise.all([
+      const [hRes, cRes, clRes] = await Promise.all([
         API.get("/hearings"),
-        API.get("/cases")
+        API.get("/cases"),
+        API.get("/clients")
       ]);
 
       setHearings(hRes.data.data || []);
       setCases(cRes.data.data || []);
+      setClients(clRes.data.data || []);
     } catch (err) {
       console.log(err);
     }
@@ -34,9 +37,12 @@ function HearingsDashboard() {
   const getCase = (case_id) =>
     cases.find(c => String(c.id) === String(case_id));
 
-  const getClient = (case_id) => {
+  const getClientName = (case_id) => {
     const c = getCase(case_id);
-    return c ? c.client_id : "Unknown Client";
+    if (!c) return "Unknown Client";
+
+    const client = clients.find(cl => String(cl.id) === String(c.client_id));
+    return client ? client.name : "Unknown Client";
   };
 
   const getCaseTitle = (case_id) => {
@@ -61,13 +67,11 @@ function HearingsDashboard() {
   const past = hearings.filter(h => isPast(h.date));
 
   return (
-    <div style={{ padding: "20px", background: "#f5f6fa", minHeight: "100vh" }}>
-      
+    <div style={container}>
+
       <h2>⚖️ Hearings Dashboard</h2>
 
-      {/* =========================
-          STATS
-      ========================= */}
+      {/* STATS */}
       <div style={statsGrid}>
         <div style={cardStat}>
           <h3>{hearings.length}</h3>
@@ -85,9 +89,7 @@ function HearingsDashboard() {
         </div>
       </div>
 
-      {/* =========================
-          TODAY SECTION
-      ========================= */}
+      {/* TODAY */}
       <h3 style={{ marginTop: "20px" }}>📅 Today</h3>
 
       {hearings.filter(h => isToday(h.date)).length === 0 ? (
@@ -103,15 +105,13 @@ function HearingsDashboard() {
             >
               <h3>{h.event}</h3>
               <p><b>Case:</b> {getCaseTitle(h.case_id)}</p>
-              <p><b>Client:</b> {getClient(h.case_id)}</p>
+              <p><b>Client:</b> {getClientName(h.case_id)}</p>
               <p><b>Date:</b> {h.date}</p>
             </div>
           ))
       )}
 
-      {/* =========================
-          UPCOMING
-      ========================= */}
+      {/* UPCOMING */}
       <h3 style={{ marginTop: "25px" }}>🟢 Upcoming Hearings</h3>
 
       {upcoming.length === 0 ? (
@@ -125,15 +125,13 @@ function HearingsDashboard() {
           >
             <h3>{h.event}</h3>
             <p><b>Case:</b> {getCaseTitle(h.case_id)}</p>
-            <p><b>Client:</b> {getClient(h.case_id)}</p>
+            <p><b>Client:</b> {getClientName(h.case_id)}</p>
             <p><b>Date:</b> {h.date}</p>
           </div>
         ))
       )}
 
-      {/* =========================
-          PAST / OVERDUE
-      ========================= */}
+      {/* PAST */}
       <h3 style={{ marginTop: "25px" }}>🔴 Past / Overdue Hearings</h3>
 
       {past.length === 0 ? (
@@ -142,12 +140,12 @@ function HearingsDashboard() {
         past.map(h => (
           <div
             key={h.id}
-            style={{ ...card, opacity: 0.8, borderLeft: "5px solid red" }}
+            style={{ ...card, opacity: 0.85, borderLeft: "5px solid red" }}
             onClick={() => navigate(`/hearings/${h.id}`)}
           >
             <h3>{h.event}</h3>
             <p><b>Case:</b> {getCaseTitle(h.case_id)}</p>
-            <p><b>Client:</b> {getClient(h.case_id)}</p>
+            <p><b>Client:</b> {getClientName(h.case_id)}</p>
             <p><b>Date:</b> {h.date}</p>
           </div>
         ))
@@ -156,9 +154,13 @@ function HearingsDashboard() {
   );
 }
 
-// =========================
-// STYLES
-// =========================
+/* STYLES */
+const container = {
+  padding: "20px",
+  background: "#f5f6fa",
+  minHeight: "100vh"
+};
+
 const statsGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(3, 1fr)",

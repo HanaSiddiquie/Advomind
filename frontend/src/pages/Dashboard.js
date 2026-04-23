@@ -68,7 +68,7 @@ function Dashboard() {
   }, [court]);
 
   return (
-    <div style={container}>
+    <div style={{ padding: "20px",  background: "#f5f6fa", minHeight: "100vh" }}>
 
       <h2>🏛 Dashboard Analytics</h2>
 

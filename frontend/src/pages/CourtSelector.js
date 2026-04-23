@@ -5,54 +5,86 @@ function CourtSelector() {
 
   const selectCourt = (court) => {
     localStorage.setItem("court", court);
-
-    // 🔥 IMPORTANT: force navigation reset
     navigate("/dashboard", { replace: true });
   };
 
   return (
     <div style={container}>
-      <h1>🏛️ Select Court</h1>
 
-      <div style={cardContainer}>
+      <div style={box}>
+        <h1 style={title}>🏛 Select Court</h1>
+        <p > </p>
 
-        <div style={card} onClick={() => selectCourt("civil")}>
-          ⚖️ Civil Court
+        <div style={cardContainer}>
+
+          <div style={card} onClick={() => selectCourt("civil")}>
+            ⚖️ Civil Court
+          </div>
+
+          <div style={card} onClick={() => selectCourt("session")}>
+            🏢 Session Court
+          </div>
+
+          <div style={card} onClick={() => selectCourt("high")}>
+            🏛 High Court
+          </div>
+
         </div>
-
-        <div style={card} onClick={() => selectCourt("session")}>
-          🏢 Session Court
-        </div>
-
-        <div style={card} onClick={() => selectCourt("high")}>
-          🏛️ High Court
-        </div>
-
       </div>
+
     </div>
   );
 }
 
+/* ================= THEME STYLES ================= */
+
 const container = {
   height: "100vh",
   display: "flex",
-  flexDirection: "column",
   justifyContent: "center",
   alignItems: "center",
-  background: "#f5f6fa"
+  background: "#e5e7eb" // soft grey theme
+};
+
+const box = {
+  textAlign: "center",
+  background: "#ffffff",
+  padding: "40px",
+  borderRadius: "16px",
+  boxShadow: "0 12px 30px rgba(0,0,0,0.12)",
+  border: "1px solid #e5e7eb"
+};
+
+const title = {
+  marginBottom: "6px",
+  fontSize: "26px",
+  fontWeight: "700",
+  color: "#111827"
+};
+
+const subtitle = {
+  marginBottom: "25px",
+  fontSize: "14px",
+  color: "#6b7280"
 };
 
 const cardContainer = {
   display: "flex",
-  gap: "20px"
+  gap: "20px",
+  justifyContent: "center",
+  flexWrap: "wrap"
 };
 
 const card = {
-  padding: "20px",
-  background: "white",
-  borderRadius: "10px",
+  padding: "22px 26px",
+  background: "#111827",
+  color: "white",
+  borderRadius: "12px",
   cursor: "pointer",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.1)"
+  minWidth: "160px",
+  fontWeight: "600",
+  boxShadow: "0 6px 18px rgba(0,0,0,0.15)",
+  transition: "0.2s"
 };
 
 export default CourtSelector;

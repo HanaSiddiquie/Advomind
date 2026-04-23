@@ -22,14 +22,10 @@ function Hearings() {
     reminder: ""
   });
 
-  // =========================
-  // FETCH DATA (FIXED)
-  // =========================
   const fetchData = async () => {
     try {
       if (!courtType) return;
 
-      // CASES (filtered by court)
       const caseQ = query(
         collection(db, "cases"),
         where("court_type", "==", courtType)
@@ -44,7 +40,6 @@ function Hearings() {
 
       setCases(caseData);
 
-      // HEARINGS (SAFE FILTER FIX)
       const hearingSnap = await getDocs(collection(db, "hearings"));
 
       const allHearings = hearingSnap.docs.map(d => ({
@@ -52,16 +47,14 @@ function Hearings() {
         ...d.data()
       }));
 
-      // 🔥 IMPORTANT FIX:
-      // includes old + new data safely
-      const filtered = allHearings.filter(h =>
-        !h.court_type || h.court_type === courtType
+      const filtered = allHearings.filter(
+        h => !h.court_type || h.court_type === courtType
       );
 
       setHearings(filtered);
 
     } catch (err) {
-      console.log("FETCH ERROR:", err);
+      console.log(err);
     }
   };
 
@@ -69,19 +62,16 @@ function Hearings() {
     fetchData();
   }, [courtType]);
 
-  // =========================
-  // ADD HEARING (COURT SAFE)
-  // =========================
   const handleSubmit = async () => {
     try {
       if (!form.case_id || !form.date || !form.event) {
-        alert("Please fill required fields");
+        alert("Fill required fields");
         return;
       }
 
       await addDoc(collection(db, "hearings"), {
         ...form,
-        court_type: courtType   // 🔥 IMPORTANT
+        court_type: courtType
       });
 
       setForm({
@@ -95,13 +85,10 @@ function Hearings() {
       fetchData();
 
     } catch (err) {
-      console.log("ADD ERROR:", err);
+      console.log(err);
     }
   };
 
-  // =========================
-  // HELPERS
-  // =========================
   const getCaseTitle = (id) => {
     const found = cases.find(c => c.id === id);
     return found ? found.title : "Unknown Case";
@@ -112,13 +99,13 @@ function Hearings() {
   );
 
   return (
-    <div style={{ padding: "20px", background: "#f5f6fa", minHeight: "100vh" }}>
+    <div style={page}>
 
-      <h2>⚖️ Hearings ({courtType?.toUpperCase()})</h2>
+      <h2 style={title}>Hearings ({courtType?.toUpperCase()})</h2>
 
-      {/* FORM */}
-      <div style={formBox}>
-        <h3>Add Hearing</h3>
+      {/* FORM CARD */}
+      <div style={card}>
+        <h3 style={heading}>Add Hearing</h3>
 
         <select
           style={input}
@@ -155,63 +142,99 @@ function Hearings() {
         />
 
         <button style={btn} onClick={handleSubmit}>
-          ➕ Add Hearing
+          Add Hearing
         </button>
       </div>
 
       {/* TIMELINE */}
-      <div style={timelineContainer}>
+      <div style={timeline}>
         {sortedHearings.length === 0 ? (
-          <p>No hearings found</p>
+          <p style={{ color: "#666" }}>No hearings found</p>
         ) : (
           sortedHearings.map(h => (
             <div key={h.id} style={timelineCard}>
-              <h3>{h.event}</h3>
-              <p><b>Date:</b> {h.date}</p>
-              <p><b>Case:</b> {getCaseTitle(h.case_id)}</p>
-              <p style={{ color: "gray" }}>{h.notes}</p>
+              <div>
+                <h3 style={{ marginBottom: "5px" }}>{h.event}</h3>
+                <div style={meta}>Date: {h.date}</div>
+                <div style={meta}>Case: {getCaseTitle(h.case_id)}</div>
+                <div style={notes}>{h.notes}</div>
+              </div>
             </div>
           ))
         )}
       </div>
+
     </div>
   );
 }
 
-/* STYLES */
-const formBox = {
-  background: "white",
-  padding: "15px",
-  borderRadius: "10px",
+/* ================= CLEAN THEME ================= */
+
+const page = {
+  padding: "20px",
+  minHeight: "100vh",
+  background: "#f5f6fa",
+  color: "#111"
+};
+
+const title = {
+  marginBottom: "15px",
+  fontWeight: "600"
+};
+
+const card = {
+  background: "#fff",
+  padding: "20px",
+  borderRadius: "12px",
+  border: "1px solid #e5e7eb",
   marginBottom: "20px"
+};
+
+const heading = {
+  marginBottom: "10px"
 };
 
 const input = {
   width: "100%",
   padding: "10px",
   marginBottom: "10px",
+  borderRadius: "8px",
   border: "1px solid #ddd",
-  borderRadius: "8px"
+  outline: "none"
 };
 
 const btn = {
   width: "100%",
   padding: "10px",
-  background: "#4f46e5",
-  color: "white",
+  background: "#111",
+  color: "#fff",
   border: "none",
-  borderRadius: "8px"
+  borderRadius: "8px",
+  cursor: "pointer"
 };
 
-const timelineContainer = {
-  marginTop: "20px"
+const timeline = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "10px"
 };
 
 const timelineCard = {
-  background: "white",
+  background: "#fff",
   padding: "15px",
-  marginBottom: "10px",
-  borderRadius: "10px"
+  borderRadius: "12px",
+  border: "1px solid #e5e7eb"
+};
+
+const meta = {
+  fontSize: "13px",
+  color: "#666",
+  marginTop: "3px"
+};
+
+const notes = {
+  marginTop: "8px",
+  color: "#333"
 };
 
 export default Hearings;

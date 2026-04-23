@@ -1,9 +1,14 @@
 import { useState } from "react";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail
+} from "firebase/auth";
 import { auth } from "../firebase";
 
 function Auth() {
   const [isLogin, setIsLogin] = useState(true);
+  const [showPass, setShowPass] = useState(false);
 
   const [form, setForm] = useState({
     email: "",
@@ -14,9 +19,6 @@ function Auth() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  // =========================
-  // LOGIN
-  // =========================
   const handleLogin = async () => {
     try {
       await signInWithEmailAndPassword(auth, form.email, form.password);
@@ -25,12 +27,23 @@ function Auth() {
     }
   };
 
-  // =========================
-  // SIGNUP
-  // =========================
   const handleSignup = async () => {
     try {
       await createUserWithEmailAndPassword(auth, form.email, form.password);
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!form.email) {
+      alert("Enter email first");
+      return;
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, form.email);
+      alert("Password reset email sent!");
     } catch (err) {
       alert(err.message);
     }
@@ -41,9 +54,9 @@ function Auth() {
 
       <div style={card}>
 
-        <h2>⚖️ Legal Case System</h2>
+        <h2 style={title}>⚖️ ADVOMIND</h2>
 
-        {/* TAB SWITCH */}
+        {/* TAB */}
         <div style={tabRow}>
           <button
             onClick={() => setIsLogin(true)}
@@ -60,7 +73,7 @@ function Auth() {
           </button>
         </div>
 
-        {/* FORM */}
+        {/* EMAIL */}
         <input
           style={input}
           name="email"
@@ -69,23 +82,39 @@ function Auth() {
           onChange={handleChange}
         />
 
-        <input
-          style={input}
-          name="password"
-          type="password"
-          placeholder="Password"
-          value={form.password}
-          onChange={handleChange}
-        />
+        {/* PASSWORD */}
+        <div style={passwordWrapper}>
+          <input
+            style={input}
+            name="password"
+            type={showPass ? "text" : "password"}
+            placeholder="Password"
+            value={form.password}
+            onChange={handleChange}
+          />
 
-        {isLogin ? (
-          <button style={btn} onClick={handleLogin}>
-            Login
+          <button
+            type="button"
+            onClick={() => setShowPass(!showPass)}
+            style={eyeBtn}
+          >
+            {showPass ? "Hide" : "Show"}
           </button>
-        ) : (
-          <button style={btn} onClick={handleSignup}>
-            Create Account
-          </button>
+        </div>
+
+        {/* BUTTON */}
+        <button
+          style={btn}
+          onClick={isLogin ? handleLogin : handleSignup}
+        >
+          {isLogin ? "Login" : "Create Account"}
+        </button>
+
+        {/* FORGOT PASSWORD */}
+        {isLogin && (
+          <p style={forgot} onClick={handleForgotPassword}>
+            Forgot password?
+          </p>
         )}
 
       </div>
@@ -93,59 +122,103 @@ function Auth() {
   );
 }
 
-/* STYLES */
+/* ================= THEME ================= */
+
 const container = {
   height: "100vh",
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
-  background: "#f5f6fa"
+  background: "#e5e7eb"
 };
 
 const card = {
-  width: "350px",
-  padding: "25px",
-  background: "white",
-  borderRadius: "12px",
+  width: "360px",
+  padding: "28px",
+  background: "#fff",
+  borderRadius: "14px",
   textAlign: "center",
-  boxShadow: "0 4px 10px rgba(0,0,0,0.1)"
+  border: "1px solid #e5e7eb",
+  boxShadow: "0 10px 25px rgba(0,0,0,0.08)"
+};
+
+const title = {
+  marginBottom: "15px",
+  fontSize: "22px",
+  fontWeight: "700",
+  color: "#111827"
 };
 
 const tabRow = {
   display: "flex",
-  justifyContent: "center",
-  marginBottom: "15px"
+  marginBottom: "15px",
+  background: "#f3f4f6",
+  borderRadius: "8px",
+  overflow: "hidden"
 };
 
 const tabBtn = {
   flex: 1,
   padding: "10px",
   border: "none",
-  background: "#eee",
-  cursor: "pointer"
+  background: "transparent",
+  cursor: "pointer",
+  color: "#374151",
+  fontWeight: "500"
 };
 
 const activeTab = {
   ...tabBtn,
-  background: "#4f46e5",
+  background: "#111827",
   color: "white"
 };
 
 const input = {
   width: "100%",
-  padding: "10px",
+  padding: "11px",
   marginBottom: "10px",
-  border: "1px solid #ddd",
-  borderRadius: "8px"
+  border: "1px solid #d1d5db",
+  borderRadius: "8px",
+  outline: "none",
+  background: "#f9fafb"
 };
 
 const btn = {
   width: "100%",
-  padding: "10px",
-  background: "#4f46e5",
+  padding: "11px",
+  background: "#111827",
   color: "white",
   border: "none",
-  borderRadius: "8px"
+  borderRadius: "8px",
+  cursor: "pointer",
+  fontWeight: "600"
+};
+
+/* password wrapper */
+const passwordWrapper = {
+  position: "relative",
+  width: "100%"
+};
+
+/* clean show/hide button */
+const eyeBtn = {
+  position: "absolute",
+  right: "10px",
+  top: "50%",
+  transform: "translateY(-50%)",
+  background: "none",
+  border: "none",
+  fontSize: "12px",
+  fontWeight: "600",
+  color: "#4f46e5",
+  cursor: "pointer"
+};
+
+const forgot = {
+  marginTop: "10px",
+  fontSize: "13px",
+  color: "#4f46e5",
+  cursor: "pointer"
 };
 
 export default Auth;

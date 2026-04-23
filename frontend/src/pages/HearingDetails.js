@@ -83,7 +83,7 @@ function HearingDetails() {
   const relatedCase = cases.find(c => c.id === hearing.case_id);
 
   return (
-    <div style={{ padding: "20px", background: "#f5f6fa", minHeight: "100vh" }}>
+    <div style={{ padding: "20px",  background: "#f5f6fa", minHeight: "100vh" }}>
       
       {/* HEADER */}
       <div style={{ marginBottom: "15px" }}>
