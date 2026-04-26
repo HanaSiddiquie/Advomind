@@ -38,35 +38,45 @@ function Cases() {
   const fetchData = async () => {
     if (!userId || !court) return;
 
-    const caseQ = query(
-      collection(db, "cases"),
-      where("userId", "==", userId),
-      where("court_type", "==", court)
-    );
+    try {
+      // CASES
+      const caseQ = query(
+        collection(db, "cases"),
+        where("userId", "==", userId),
+        where("court_type", "==", court)
+      );
 
-    const archiveQ = query(
-      collection(db, "archive"),
-      where("userId", "==", userId),
-      where("court_type", "==", court)
-    );
+      // ARCHIVE
+      const archiveQ = query(
+        collection(db, "archive"),
+        where("userId", "==", userId),
+        where("court_type", "==", court)
+      );
 
-    const clientQ = query(
-      collection(db, "clients"),
-      where("userId", "==", userId),
-      where("court_type", "==", court)
-    );
+      // ✅ FIX: CLIENTS FROM USER SUBCOLLECTION
+      const clientQ = collection(db, "users", userId, "clients");
 
-    const [caseSnap, archiveSnap, clientSnap] = await Promise.all([
-      getDocs(caseQ),
-      getDocs(archiveQ),
-      getDocs(clientQ)
-    ]);
+      const [caseSnap, archiveSnap, clientSnap] = await Promise.all([
+        getDocs(caseQ),
+        getDocs(archiveQ),
+        getDocs(clientQ)
+      ]);
 
-    const active = caseSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const archived = archiveSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const active = caseSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const archived = archiveSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    setCases({ active, archived });
-    setClients(clientSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setCases({ active, archived });
+
+      // ✅ FILTER CLIENTS BY COURT (IMPORTANT)
+      const filteredClients = clientSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(c => c.court_type === court);
+
+      setClients(filteredClients);
+
+    } catch (err) {
+      console.error("FETCH ERROR:", err);
+    }
   };
 
   useEffect(() => {
@@ -75,7 +85,10 @@ function Cases() {
 
   // ================= ADD =================
   const handleSubmit = async () => {
-    if (!form.title || !userId) return;
+    if (!form.title || !form.client_id || !userId) {
+      alert("Please select client and fill all fields");
+      return;
+    }
 
     await addDoc(collection(db, "cases"), {
       ...form,
@@ -95,7 +108,7 @@ function Cases() {
     fetchData();
   };
 
-  // ================= ARCHIVE FIXED =================
+  // ================= ARCHIVE =================
   const archiveCase = async (caseItem) => {
     try {
       const { id, ...data } = caseItem;
@@ -111,11 +124,10 @@ function Cases() {
       fetchData();
     } catch (err) {
       console.error("Archive failed:", err);
-      alert("Archive failed");
     }
   };
 
-  // ================= RESTORE FIXED =================
+  // ================= RESTORE =================
   const restoreCase = async (caseItem) => {
     try {
       const { id, originalCaseId, archivedAt, ...cleanData } = caseItem;
@@ -131,7 +143,6 @@ function Cases() {
       fetchData();
     } catch (err) {
       console.error("Restore failed:", err);
-      alert("Restore failed");
     }
   };
 
@@ -152,11 +163,16 @@ function Cases() {
           }
         >
           <option value="">Select Client</option>
-          {clients.map(c => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
+
+          {clients.length === 0 ? (
+            <option disabled>No clients found</option>
+          ) : (
+            clients.map(c => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))
+          )}
         </select>
 
         <input
