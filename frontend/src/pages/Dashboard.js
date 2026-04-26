@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react";
-import { db, auth, storage } from "../firebase";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { db, auth } from "../firebase";
+import {
+  collection,
+  getDocs,
+  query,
+  where
+} from "firebase/firestore";
 
 function Dashboard() {
   const court = localStorage.getItem("court");
+
+  const [userId, setUserId] = useState(null);
 
   const [stats, setStats] = useState({
     clients: 0,
@@ -11,13 +18,26 @@ function Dashboard() {
     hearings: 0
   });
 
-  // =========================
-  // GET HEARINGS COUNT (FIXED LOGIC)
-  // =========================
+  // ================= AUTH =================
+  useEffect(() => {
+    const unsub = auth.onAuthStateChanged(user => {
+      setUserId(user?.uid || null);
+    });
+
+    return () => unsub();
+  }, []);
+
+  // ================= HEARINGS COUNT =================
   const getHearingsCount = async (caseIds) => {
     if (!caseIds.length) return 0;
 
-    const snap = await getDocs(collection(db, "hearings"));
+    const q = query(
+      collection(db, "hearings"),
+      where("court_type", "==", court),
+      where("userId", "==", userId)
+    );
+
+    const snap = await getDocs(q);
 
     const filtered = snap.docs.filter(doc =>
       caseIds.includes(doc.data().case_id)
@@ -26,30 +46,29 @@ function Dashboard() {
     return filtered.length;
   };
 
-  // =========================
-  // FETCH ANALYTICS
-  // =========================
+  // ================= FETCH STATS =================
   const fetchStats = async () => {
     try {
-      if (!court) return;
+      if (!court || !userId) return;
 
-      // CLIENTS
+      // CLIENTS (FIXED)
       const clientsQ = query(
-        collection(db, "clients"),
-        where("court_type", "==", court)
-      );
-      const clientsSnap = await getDocs(clientsQ);
+  collection(db, "users", userId, "clients")
+);
+
+const clientsSnap = await getDocs(clientsQ);
 
       // CASES
       const casesQ = query(
         collection(db, "cases"),
-        where("court_type", "==", court)
+        where("court_type", "==", court),
+        where("userId", "==", userId)
       );
       const casesSnap = await getDocs(casesQ);
 
       const caseIds = casesSnap.docs.map(d => d.id);
 
-      // HEARINGS (FIXED)
+      // HEARINGS
       const hearingsCount = await getHearingsCount(caseIds);
 
       setStats({
@@ -65,10 +84,10 @@ function Dashboard() {
 
   useEffect(() => {
     fetchStats();
-  }, [court]);
+  }, [court, userId]);
 
   return (
-    <div style={{ padding: "20px",  background: "#f5f6fa", minHeight: "100vh" }}>
+    <div style={page}>
 
       <h2>🏛 Dashboard Analytics</h2>
 
@@ -100,7 +119,7 @@ function Dashboard() {
 }
 
 /* STYLES */
-const container = {
+const page = {
   padding: "20px",
   background: "#f5f6fa",
   minHeight: "100vh"

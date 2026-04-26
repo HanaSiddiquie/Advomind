@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import API from "../services/api";
+import { db, auth } from "../firebase";
+import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
 
 function HearingDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const [hearing, setHearing] = useState(null);
-  const [cases, setCases] = useState([]); // ✅ for linking case
+  const [userId, setUserId] = useState(null);
+  const courtType = localStorage.getItem("court");
 
   const [form, setForm] = useState({
     date: "",
@@ -16,185 +18,143 @@ function HearingDetails() {
     reminder: ""
   });
 
-  // =========================
-  // FETCH HEARING
-  // =========================
-  const fetchHearing = () => {
-    API.get("/hearings")
-      .then(res => {
-        const found = (res.data.data || []).find(h => h.id === id);
-        setHearing(found);
+  // ================= AUTH =================
+  useEffect(() => {
+    const unsub = auth.onAuthStateChanged(user => {
+      setUserId(user?.uid || null);
+    });
 
-        if (found) {
-          setForm({
-            date: found.date || "",
-            event: found.event || "",
-            notes: found.notes || "",
-            reminder: found.reminder || ""
-          });
-        }
-      })
-      .catch(err => console.log(err));
-  };
+    return () => unsub();
+  }, []);
 
-  // =========================
-  // FETCH CASES (for linking)
-  // =========================
-  const fetchCases = () => {
-    API.get("/cases")
-      .then(res => setCases(res.data.data || []))
-      .catch(err => console.log(err));
+  // ================= FETCH HEARING (FIXED) =================
+  const fetchHearing = async () => {
+    if (!userId || !courtType || !id) return;
+
+    const snap = await getDoc(doc(db, "hearings", id));
+
+    if (!snap.exists()) {
+      setHearing(null);
+      return;
+    }
+
+    const data = snap.data();
+
+    // 🔒 SECURITY CHECK (VERY IMPORTANT)
+    if (data.userId !== userId || data.court_type !== courtType) {
+      setHearing(null);
+      return;
+    }
+
+    setHearing({ id: snap.id, ...data });
+
+    setForm({
+      date: data.date || "",
+      event: data.event || "",
+      notes: data.notes || "",
+      reminder: data.reminder || ""
+    });
   };
 
   useEffect(() => {
     fetchHearing();
-    fetchCases();
-  }, [id]);
+  }, [id, userId]);
 
-  // =========================
-  // UPDATE
-  // =========================
-  const updateHearing = () => {
-    API.put(`/hearings/${id}`, form)
-      .then(() => {
-        fetchHearing();
-        alert("Updated successfully");
-      })
-      .catch(err => console.log(err));
+  // ================= UPDATE =================
+  const updateHearing = async () => {
+    await updateDoc(doc(db, "hearings", id), form);
+    fetchHearing();
+    alert("Updated successfully");
   };
 
-  // =========================
-  // DELETE
-  // =========================
-  const deleteHearing = () => {
+  // ================= DELETE =================
+  const deleteHearing = async () => {
     if (!window.confirm("Delete this hearing?")) return;
 
-    API.delete(`/hearings/${id}`)
-      .then(() => {
-        alert("Deleted successfully");
-        navigate("/hearings");
-      })
-      .catch(err => console.log(err));
+    await deleteDoc(doc(db, "hearings", id));
+    alert("Deleted");
+    navigate("/hearings");
   };
 
-  if (!hearing) return <p style={{ padding: "20px" }}>Loading...</p>;
-
-  // ✅ Find related case
-  const relatedCase = cases.find(c => c.id === hearing.case_id);
+  if (!hearing) {
+    return (
+      <div style={{ padding: 20 }}>
+        <h3>❌ Hearing not found or not accessible</h3>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ padding: "20px",  background: "#f5f6fa", minHeight: "100vh" }}>
+    <div style={{ padding: 20, background: "#f5f6fa", minHeight: "100vh" }}>
       
-      {/* HEADER */}
-      <div style={{ marginBottom: "15px" }}>
-        <h2>⚖️ Hearing Details</h2>
-        <p style={{ color: "gray" }}>Hearing ID: {id}</p>
-      </div>
+      <h2>⚖️ Hearing Details</h2>
+<p style={{ color: "gray" }}>
+  {hearing.date} • {hearing.event}
+</p>
 
-      {/* CARD */}
-      <div style={{
-        background: "white",
-        padding: "20px",
-        borderRadius: "12px",
-        boxShadow: "0 2px 10px rgba(0,0,0,0.08)"
-      }}>
-        {/* EVENT */}
+      <div style={card}>
         <input
-          style={inputStyle}
+          style={input}
           value={form.event}
-          onChange={e => setForm({ ...form, event: e.target.value })}
+          onChange={(e) => setForm({ ...form, event: e.target.value })}
           placeholder="Event"
         />
 
-        {/* DATE */}
         <input
-          style={inputStyle}
+          style={input}
           type="date"
           value={form.date}
-          onChange={e => setForm({ ...form, date: e.target.value })}
+          onChange={(e) => setForm({ ...form, date: e.target.value })}
         />
 
-        {/* NOTES */}
         <textarea
-          style={textareaStyle}
+          style={input}
           value={form.notes}
-          onChange={e => setForm({ ...form, notes: e.target.value })}
+          onChange={(e) => setForm({ ...form, notes: e.target.value })}
           placeholder="Notes"
         />
 
-        {/* REMINDER */}
         <input
-          style={inputStyle}
+          style={input}
           value={form.reminder}
-          onChange={e => setForm({ ...form, reminder: e.target.value })}
+          onChange={(e) => setForm({ ...form, reminder: e.target.value })}
           placeholder="Reminder"
         />
 
-        {/* BUTTONS */}
-        <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
-          <button style={btnStyle} onClick={updateHearing}>
-            Save Changes
+        <div style={{ display: "flex", gap: 10 }}>
+          <button style={btn} onClick={updateHearing}>
+            Save
           </button>
 
-          <button
-            style={{ ...btnStyle, background: "red" }}
-            onClick={deleteHearing}
-          >
+          <button style={{ ...btn, background: "red" }} onClick={deleteHearing}>
             Delete
           </button>
         </div>
       </div>
-
-      {/* LINKED CASE */}
-      {relatedCase && (
-        <div style={{ marginTop: "20px" }}>
-          <h3>📁 Related Case</h3>
-
-          <div
-            style={{
-              padding: "12px",
-              background: "#eef2ff",
-              borderRadius: "10px",
-              cursor: "pointer",
-              boxShadow: "0 2px 6px rgba(0,0,0,0.08)"
-            }}
-            onClick={() => navigate(`/cases/${relatedCase.id}`)}
-          >
-            <h4>{relatedCase.title}</h4>
-            <p style={{ color: "gray" }}>Case ID: {relatedCase.id}</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-// =========================
-// STYLES
-// =========================
-const inputStyle = {
-  width: "100%",
-  padding: "10px",
-  marginBottom: "10px",
-  borderRadius: "8px",
-  border: "1px solid #ccc"
+const card = {
+  background: "#fff",
+  padding: 20,
+  borderRadius: 12
 };
 
-const textareaStyle = {
+const input = {
   width: "100%",
-  padding: "10px",
-  marginBottom: "10px",
-  borderRadius: "8px",
-  border: "1px solid #ccc"
+  padding: 10,
+  marginBottom: 10,
+  borderRadius: 8,
+  border: "1px solid #ddd"
 };
 
-const btnStyle = {
-  padding: "10px",
-  background: "#4f46e5",
-  color: "white",
+const btn = {
+  padding: 10,
+  background: "#111",
+  color: "#fff",
   border: "none",
-  borderRadius: "8px",
-  cursor: "pointer"
+  borderRadius: 8
 };
 
 export default HearingDetails;

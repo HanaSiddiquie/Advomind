@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { db, auth } from "../firebase";
 import {
   collection,
@@ -16,6 +17,8 @@ function Hearings() {
   const [userId, setUserId] = useState(null);
   const courtType = localStorage.getItem("court");
 
+  const navigate = useNavigate();
+
   const [form, setForm] = useState({
     case_id: "",
     date: "",
@@ -23,7 +26,7 @@ function Hearings() {
     notes: ""
   });
 
-  // ================= AUTH LISTENER =================
+  // ================= AUTH =================
   useEffect(() => {
     const unsub = auth.onAuthStateChanged(user => {
       setUserId(user?.uid || null);
@@ -45,8 +48,7 @@ function Hearings() {
         )
       );
 
-      const caseData = caseSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setCases(caseData);
+      setCases(caseSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
       const clientSnap = await getDocs(
         query(
@@ -82,7 +84,7 @@ function Hearings() {
     fetchData();
   }, [courtType, userId]);
 
-  // ================= MAPS (FAST LOOKUP) =================
+  // ================= MAPS =================
   const caseMap = useMemo(() => {
     const map = {};
     cases.forEach(c => (map[c.id] = c));
@@ -181,7 +183,11 @@ function Hearings() {
           <p style={{ color: "#666" }}>No hearings scheduled</p>
         ) : (
           sortedHearings.map(h => (
-            <div key={h.id} style={card}>
+            <div
+              key={h.id}
+              style={{ ...card, cursor: "pointer" }}
+              onClick={() => navigate(`/hearings/${h.id}`)}
+            >
               <div style={badge}>{h.date}</div>
 
               <h3 style={{ margin: "8px 0" }}>{h.event}</h3>
@@ -207,7 +213,6 @@ const page = {
 };
 
 const title = { marginBottom: "5px" };
-
 const subtitle = { marginBottom: "15px", color: "#666" };
 
 const formCard = {

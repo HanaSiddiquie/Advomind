@@ -42,15 +42,12 @@ function ClientDetails() {
     const unsub = auth.onAuthStateChanged(user => {
       setUserId(user?.uid || null);
     });
-
     return () => unsub();
   }, []);
 
   /* ================= CLIENT ================= */
-  const fetchClient = async () => {
-    if (!userId) return;
-
-    const snap = await getDoc(doc(db, "users", userId, "clients", id));
+  const fetchClient = async (uid) => {
+    const snap = await getDoc(doc(db, "users", uid, "clients", id));
 
     if (snap.exists()) {
       const data = snap.data();
@@ -61,40 +58,41 @@ function ClientDetails() {
         cnic: data.cnic || "",
         address: data.address || "",
         email: data.email || "",
-        phone: data.phone || ""
+        phone: ""
       });
     } else {
       setClient(null);
     }
   };
 
-  /* ================= CASES (FIXED LOGIC) ================= */
-  const fetchCases = async () => {
-    if (!userId) return;
+  /* ================= CASES (ROBUST FIX) ================= */
+  const fetchCases = async (uid) => {
+    if (!uid || !court || !id) return;
 
     const q = query(
       collection(db, "cases"),
-      where("userId", "==", userId),
+      where("client_id", "==", id),
+      where("userId", "==", uid),
       where("court_type", "==", court)
     );
 
     const snap = await getDocs(q);
 
-    const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const data = snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
 
-    // IMPORTANT FIX: filter safely in frontend too
-    const filtered = all.filter(c => c.client_id === id);
-
-    setCases(filtered);
+    setCases(data);
   };
 
   /* ================= HEARINGS ================= */
-  const fetchHearings = async () => {
-    if (!userId) return;
+  const fetchHearings = async (uid) => {
+    if (!uid || !court) return;
 
     const q = query(
       collection(db, "hearings"),
-      where("userId", "==", userId),
+      where("userId", "==", uid),
       where("court_type", "==", court)
     );
 
@@ -105,9 +103,17 @@ function ClientDetails() {
 
   /* ================= LOAD ================= */
   useEffect(() => {
+    if (!userId || !id || !court) return;
+
     const load = async () => {
       setLoading(true);
-      await Promise.all([fetchClient(), fetchCases(), fetchHearings()]);
+
+      await Promise.all([
+        fetchClient(userId),
+        fetchCases(userId),
+        fetchHearings(userId)
+      ]);
+
       setLoading(false);
     };
 
@@ -117,12 +123,12 @@ function ClientDetails() {
   /* ================= UPDATE CLIENT ================= */
   const updateClient = async () => {
     await updateDoc(doc(db, "users", userId, "clients", id), form);
-    fetchClient();
+    fetchClient(userId);
   };
 
   /* ================= ADD CASE ================= */
   const addCase = async () => {
-    if (!caseForm.title) return;
+    if (!caseForm.title || !userId) return;
 
     await addDoc(collection(db, "cases"), {
       client_id: id,
@@ -134,14 +140,13 @@ function ClientDetails() {
     });
 
     setCaseForm({ title: "", description: "" });
-    fetchCases();
+    fetchCases(userId);
   };
 
   /* ================= LOADING ================= */
   if (loading) return <div style={page}>Loading...</div>;
   if (!client) return <div style={page}>Client not found</div>;
 
-  /* ================= CLIENT HEARINGS ================= */
   const clientCaseIds = cases.map(c => c.id);
 
   const clientHearings = hearings.filter(h =>
@@ -150,7 +155,6 @@ function ClientDetails() {
 
   return (
     <div style={page}>
-
       <h2 style={title}>👤 Client Dashboard</h2>
 
       <div style={grid}>
@@ -177,11 +181,6 @@ function ClientDetails() {
           <input style={input} value={form.email}
             onChange={e => setForm({ ...form, email: e.target.value })}
             placeholder="Email"
-          />
-
-          <input style={input} value={form.phone}
-            onChange={e => setForm({ ...form, phone: e.target.value })}
-            placeholder="Phone"
           />
 
           <button style={btn} onClick={updateClient}>
@@ -254,7 +253,7 @@ function ClientDetails() {
   );
 }
 
-/* ================= STYLES (UNCHANGED) ================= */
+/* ================= STYLES ================= */
 
 const page = {
   padding: "25px",
