@@ -33,6 +33,18 @@ function Navbar() {
         <Link to="/clients" style={link}>Clients</Link>
         <Link to="/cases" style={link}>Cases</Link>
         <Link to="/hearings" style={link}>Hearings</Link>
+        <Link
+  to="/diary"
+  style={diaryBtn}
+  onMouseOver={(e) => {
+    e.target.style.background = "#1f2937";
+  }}
+  onMouseOut={(e) => {
+    e.target.style.background = "#111";
+  }}
+>
+  📔 Diary
+</Link>
       </div>
 
       {/* RIGHT */}
@@ -95,6 +107,23 @@ const link = {
   padding: "8px 12px",
   borderRadius: "6px",
   background: "#222"
+};
+
+const diaryBtn = {
+  color: "white",
+  textDecoration: "none",
+  padding: "8px 12px",
+  borderRadius: "6px",
+  background: "#222",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+  cursor: "pointer"
+};;
+
+const diaryBtnHover = {
+  ...diaryBtn,
+  background: "#1f2937",
 };
 
 const switchBtn = {

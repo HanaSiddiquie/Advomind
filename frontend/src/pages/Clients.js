@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 import {
   collection,
   getDocs,
   addDoc,
   deleteDoc,
   doc,
-  updateDoc,
   query,
   where
 } from "firebase/firestore";
@@ -15,258 +14,219 @@ import {
 function Clients() {
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [userId, setUserId] = useState(null);
 
   const navigate = useNavigate();
-
-  const [courtType, setCourtType] = useState(localStorage.getItem("court"));
-
-  useEffect(() => {
-    const handler = () => {
-      setCourtType(localStorage.getItem("court"));
-    };
-
-    window.addEventListener("storage", handler);
-    return () => window.removeEventListener("storage", handler);
-  }, []);
+  const court = localStorage.getItem("court");
 
   const [form, setForm] = useState({
     name: "",
     cnic: "",
-    address: "",
-    email: "",
     phone: ""
   });
 
-  const [editing, setEditing] = useState(false);
-  const [currentId, setCurrentId] = useState(null);
+  // ================= AUTH =================
+  useEffect(() => {
+    const unsub = auth.onAuthStateChanged(user => {
+      setUserId(user?.uid || null);
+    });
+
+    return () => unsub();
+  }, []);
 
   // ================= FETCH =================
   const fetchClients = async () => {
-    setLoading(true);
+    if (!userId || !court) return;
 
-    try {
-      if (!courtType) return;
+    const q = query(
+      collection(db, "users", userId, "clients"),
+      where("court_type", "==", court)
+    );
 
-      const q = query(
-        collection(db, "clients"),
-        where("court_type", "==", courtType)
-      );
+    const snap = await getDocs(q);
 
-      const snapshot = await getDocs(q);
-
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-
-      setClients(data);
-    } finally {
-      setLoading(false);
-    }
+    setClients(snap.docs.map(d => ({ id: d.id, ...d.data() })));
   };
 
   useEffect(() => {
     fetchClients();
-  }, [courtType]);
+  }, [userId, court]);
+
+  // ================= ADD =================
+  const handleSubmit = async () => {
+    if (!form.name || !form.cnic || !userId) return;
+
+    await addDoc(
+      collection(db, "users", userId, "clients"),
+      {
+        ...form,
+        court_type: court
+      }
+    );
+
+    setForm({ name: "", cnic: "", phone: "" });
+    fetchClients();
+  };
 
   // ================= DELETE =================
   const handleDelete = async (id) => {
-    if (!window.confirm("Delete this client?")) return;
-    await deleteDoc(doc(db, "clients", id));
+    await deleteDoc(doc(db, "users", userId, "clients", id));
     fetchClients();
   };
 
-  const handleEdit = (client) => {
-    setForm(client);
-    setEditing(true);
-    setCurrentId(client.id);
-  };
-
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
-  const handleSubmit = async () => {
-    const payload = { ...form, court_type: courtType };
-
-    if (editing) {
-      await updateDoc(doc(db, "clients", currentId), payload);
-    } else {
-      await addDoc(collection(db, "clients"), payload);
-    }
-
-    setForm({ name: "", cnic: "", address: "", email: "", phone: "" });
-    setEditing(false);
-    setCurrentId(null);
-    fetchClients();
-  };
-
+  // ================= FILTER =================
   const filteredClients = clients.filter(c =>
     c.name?.toLowerCase().includes(search.toLowerCase()) ||
-    c.cnic?.includes(search) ||
-    c.email?.toLowerCase().includes(search.toLowerCase())
+    c.cnic?.includes(search)
   );
 
+  // ================= UI =================
   return (
-    <div style={container}>
+    <div style={page}>
+      <h2 style={title}>👤 Clients</h2>
+      <p style={subtitle}>Court: {court?.toUpperCase()}</p>
 
-      {/* HEADER */}
-      <div style={header}>
-        <div>
-          <h2 style={{ margin: 0 }}>👤 Clients</h2>
-          <p style={{ margin: 0, color: "#6b7280" }}>
-            Court: {courtType?.toUpperCase()}
-          </p>
-        </div>
+      {/* FORM */}
+      <div style={card}>
+        <h3>Add Client</h3>
 
         <input
-          style={searchBar}
-          placeholder="Search clients..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Name"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          style={input}
         />
-      </div>
 
-      {/* FORM CARD */}
-      <div style={formCard}>
-        <h3 style={{ marginBottom: 15 }}>
-          {editing ? "✏️ Edit Client" : "➕ Add New Client"}
-        </h3>
+        <input
+          placeholder="CNIC"
+          value={form.cnic}
+          onChange={(e) => setForm({ ...form, cnic: e.target.value })}
+          style={input}
+        />
 
-        <div style={grid}>
-          <input style={input} name="name" value={form.name} onChange={handleChange} placeholder="Name" />
-          <input style={input} name="cnic" value={form.cnic} onChange={handleChange} placeholder="CNIC" />
-          <input style={input} name="phone" value={form.phone} onChange={handleChange} placeholder="Phone" />
-          <input style={input} name="email" value={form.email} onChange={handleChange} placeholder="Email" />
-          <input style={{ ...input, gridColumn: "span 2" }} name="address" value={form.address} onChange={handleChange} placeholder="Address" />
-        </div>
+        <input
+          placeholder="Phone"
+          value={form.phone}
+          onChange={(e) => setForm({ ...form, phone: e.target.value })}
+          style={input}
+        />
 
-        <button style={btn} onClick={handleSubmit}>
-          {editing ? "Update Client" : "Save Client"}
+        <button onClick={handleSubmit} style={btn}>
+          Add Client
         </button>
       </div>
 
-      {loading && <p>Loading...</p>}
+      {/* SEARCH */}
+      <input
+        placeholder="Search by name or CNIC..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        style={searchBox}
+      />
 
-      {/* CLIENT CARDS */}
-      <div style={cardGrid}>
-        {filteredClients.map(c => (
-          <div key={c.id} style={card}>
+      {/* LIST */}
+      <div style={grid}>
+        {filteredClients.length === 0 ? (
+          <p style={{ color: "#666" }}>No clients found</p>
+        ) : (
+          filteredClients.map(c => (
+            <div key={c.id} style={cardBox}>
+              
+              <div
+                style={{ cursor: "pointer" }}
+                onClick={() => navigate(`/clients/${c.id}`)}
+              >
+                <h3>{c.name}</h3>
+                <p style={meta}>CNIC: {c.cnic}</p>
+                {c.phone && <p style={meta}>📞 {c.phone}</p>}
+              </div>
 
-            <div onClick={() => navigate(`/clients/${c.id}`)} style={{ cursor: "pointer" }}>
-              <h3 style={{ marginBottom: 5 }}>{c.name}</h3>
-              <p style={meta}><b>CNIC:</b> {c.cnic}</p>
-              <p style={meta}><b>Email:</b> {c.email}</p>
-              <p style={meta}><b>Phone:</b> {c.phone}</p>
+              <button
+                onClick={() => handleDelete(c.id)}
+                style={danger}
+              >
+                Delete
+              </button>
             </div>
-
-            <div style={btnRow}>
-              <button onClick={() => handleEdit(c)} style={editBtn}>Edit</button>
-              <button onClick={() => handleDelete(c.id)} style={deleteBtn}>Delete</button>
-            </div>
-
-          </div>
-        ))}
+          ))
+        )}
       </div>
-
     </div>
   );
 }
 
-/* ================= THEME ================= */
+/* ================= STYLES ================= */
 
-const container = {
-  padding: "20px",
-  background: "#e5e7eb",
+const page = {
+  padding: 20,
+  background: "#f5f6fa",
   minHeight: "100vh"
 };
 
-const header = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: "20px"
-};
+const title = { marginBottom: "5px" };
 
-const searchBar = {
-  padding: "10px",
-  borderRadius: "10px",
-  border: "1px solid #d1d5db",
-  width: "260px"
-};
+const subtitle = { marginBottom: "15px", color: "#666" };
 
-const formCard = {
+const card = {
   background: "#fff",
-  padding: "20px",
-  borderRadius: "14px",
-  marginBottom: "25px",
-  boxShadow: "0 6px 20px rgba(0,0,0,0.08)"
+  padding: 15,
+  borderRadius: 12,
+  marginBottom: 15,
+  boxShadow: "0 3px 10px rgba(0,0,0,0.05)"
+};
+
+const input = {
+  width: "100%",
+  padding: 10,
+  marginBottom: 10,
+  borderRadius: 8,
+  border: "1px solid #ddd"
+};
+
+const btn = {
+  width: "100%",
+  padding: 10,
+  background: "#111",
+  color: "#fff",
+  border: "none",
+  borderRadius: 10
+};
+
+const searchBox = {
+  width: "100%",
+  padding: 10,
+  marginBottom: 15,
+  borderRadius: 10,
+  border: "1px solid #ddd"
 };
 
 const grid = {
   display: "grid",
-  gridTemplateColumns: "repeat(2, 1fr)",
-  gap: "10px"
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 12
 };
 
-const input = {
-  padding: "10px",
-  borderRadius: "8px",
-  border: "1px solid #d1d5db"
-};
-
-const btn = {
-  marginTop: "10px",
-  padding: "12px",
-  background: "#111827",
-  color: "white",
-  border: "none",
-  borderRadius: "10px",
-  width: "100%",
-  cursor: "pointer"
-};
-
-const cardGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-  gap: "15px"
-};
-
-const card = {
+const cardBox = {
   background: "#fff",
-  padding: "15px",
-  borderRadius: "12px",
-  boxShadow: "0 4px 14px rgba(0,0,0,0.08)"
+  padding: 15,
+  borderRadius: 12,
+  boxShadow: "0 2px 8px rgba(0,0,0,0.05)"
 };
 
 const meta = {
-  fontSize: "13px",
-  color: "#6b7280"
+  fontSize: 13,
+  color: "#666",
+  marginTop: 3
 };
 
-const btnRow = {
-  display: "flex",
-  gap: "10px",
-  marginTop: "10px"
-};
-
-const editBtn = {
-  flex: 1,
-  padding: "8px",
-  background: "#374151",
-  color: "white",
+const danger = {
+  marginTop: 10,
+  width: "100%",
+  padding: 8,
+  background: "red",
+  color: "#fff",
   border: "none",
-  borderRadius: "8px"
-};
-
-const deleteBtn = {
-  flex: 1,
-  padding: "8px",
-  background: "#ef4444",
-  color: "white",
-  border: "none",
-  borderRadius: "8px"
+  borderRadius: 8
 };
 
 export default Clients;

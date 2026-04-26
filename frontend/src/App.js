@@ -21,6 +21,8 @@ import Hearings from "./pages/Hearings";
 import HearingDetails from "./pages/HearingDetails";
 
 import HearingsDashboard from "./pages/HearingsDashboard";
+import ArchivePage from "./pages/ArchivePage";
+import Diary from "./pages/Diary";
 
 // =====================
 // PROTECTED ROUTE
@@ -114,9 +116,10 @@ export default function App() {
         <Route path="/hearings/:id" element={<Protected user={user}><HearingDetails /></Protected>} />
 
         <Route path="/hearings-dashboard" element={<Protected user={user}><HearingsDashboard /></Protected>} />
-
+        <Route path="/archive" element={<ArchivePage />} />
         {/* FALLBACK */}
         <Route path="*" element={<Navigate to="/" />} />
+        <Route path="/diary" element={<Diary />} />
 
       </Routes>
     </BrowserRouter>

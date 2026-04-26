@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 import {
   doc,
   updateDoc,
@@ -21,6 +21,9 @@ function ClientDetails() {
   const [hearings, setHearings] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const [userId, setUserId] = useState(null);
+  const court = localStorage.getItem("court");
+
   const [form, setForm] = useState({
     name: "",
     cnic: "",
@@ -34,11 +37,20 @@ function ClientDetails() {
     description: ""
   });
 
-  // =========================
-  // FETCH CLIENT
-  // =========================
+  /* ================= AUTH ================= */
+  useEffect(() => {
+    const unsub = auth.onAuthStateChanged(user => {
+      setUserId(user?.uid || null);
+    });
+
+    return () => unsub();
+  }, []);
+
+  /* ================= CLIENT ================= */
   const fetchClient = async () => {
-    const snap = await getDoc(doc(db, "clients", id));
+    if (!userId) return;
+
+    const snap = await getDoc(doc(db, "users", userId, "clients", id));
 
     if (snap.exists()) {
       const data = snap.data();
@@ -56,29 +68,42 @@ function ClientDetails() {
     }
   };
 
-  // =========================
-  // FETCH CASES
-  // =========================
+  /* ================= CASES (FIXED LOGIC) ================= */
   const fetchCases = async () => {
-    const q = query(collection(db, "cases"), where("client_id", "==", id));
+    if (!userId) return;
+
+    const q = query(
+      collection(db, "cases"),
+      where("userId", "==", userId),
+      where("court_type", "==", court)
+    );
+
     const snap = await getDocs(q);
 
-    setCases(
-      snap.docs.map(d => ({ id: d.id, ...d.data() }))
-    );
+    const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // IMPORTANT FIX: filter safely in frontend too
+    const filtered = all.filter(c => c.client_id === id);
+
+    setCases(filtered);
   };
 
-  // =========================
-  // FETCH HEARINGS
-  // =========================
+  /* ================= HEARINGS ================= */
   const fetchHearings = async () => {
-    const snap = await getDocs(collection(db, "hearings"));
+    if (!userId) return;
 
-    setHearings(
-      snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    const q = query(
+      collection(db, "hearings"),
+      where("userId", "==", userId),
+      where("court_type", "==", court)
     );
+
+    const snap = await getDocs(q);
+
+    setHearings(snap.docs.map(d => ({ id: d.id, ...d.data() })));
   };
 
+  /* ================= LOAD ================= */
   useEffect(() => {
     const load = async () => {
       setLoading(true);
@@ -87,38 +112,38 @@ function ClientDetails() {
     };
 
     load();
-  }, [id]);
+  }, [id, userId, court]);
 
-  // =========================
-  // UPDATE CLIENT
-  // =========================
+  /* ================= UPDATE CLIENT ================= */
   const updateClient = async () => {
-    await updateDoc(doc(db, "clients", id), form);
+    await updateDoc(doc(db, "users", userId, "clients", id), form);
     fetchClient();
   };
 
-  // =========================
-  // ADD CASE
-  // =========================
+  /* ================= ADD CASE ================= */
   const addCase = async () => {
-    if (!caseForm.title || !caseForm.description) return;
+    if (!caseForm.title) return;
 
     await addDoc(collection(db, "cases"), {
       client_id: id,
       title: caseForm.title,
       description: caseForm.description,
       status: "Open",
-      court_type: localStorage.getItem("court")
+      court_type: court,
+      userId
     });
 
     setCaseForm({ title: "", description: "" });
     fetchCases();
   };
 
+  /* ================= LOADING ================= */
   if (loading) return <div style={page}>Loading...</div>;
   if (!client) return <div style={page}>Client not found</div>;
 
+  /* ================= CLIENT HEARINGS ================= */
   const clientCaseIds = cases.map(c => c.id);
+
   const clientHearings = hearings.filter(h =>
     clientCaseIds.includes(h.case_id)
   );
@@ -192,16 +217,20 @@ function ClientDetails() {
         <h3 style={cardTitle}>⚖️ Cases</h3>
 
         <div style={cardGrid}>
-          {cases.map(c => (
-            <div
-              key={c.id}
-              style={miniCard}
-              onClick={() => navigate(`/cases/${c.id}`)}
-            >
-              <h4>{c.title}</h4>
-              <p style={{ color: "#888" }}>{c.status}</p>
-            </div>
-          ))}
+          {cases.length === 0 ? (
+            <p style={{ color: "#888" }}>No cases found for this client</p>
+          ) : (
+            cases.map(c => (
+              <div
+                key={c.id}
+                style={miniCard}
+                onClick={() => navigate(`/cases/${c.id}`)}
+              >
+                <h4>{c.title}</h4>
+                <p style={{ color: "#888" }}>{c.status}</p>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -225,7 +254,7 @@ function ClientDetails() {
   );
 }
 
-/* ================= THEME ================= */
+/* ================= STYLES (UNCHANGED) ================= */
 
 const page = {
   padding: "25px",
@@ -233,10 +262,7 @@ const page = {
   minHeight: "100vh"
 };
 
-const title = {
-  marginBottom: "20px",
-  color: "#111"
-};
+const title = { marginBottom: "20px" };
 
 const grid = {
   display: "grid",
@@ -251,10 +277,7 @@ const card = {
   boxShadow: "0 2px 10px rgba(0,0,0,0.06)"
 };
 
-const cardTitle = {
-  marginBottom: "15px",
-  color: "#111"
-};
+const cardTitle = { marginBottom: "15px" };
 
 const input = {
   width: "100%",
@@ -278,8 +301,7 @@ const btn = {
   background: "#1f2937",
   color: "white",
   border: "none",
-  borderRadius: "8px",
-  cursor: "pointer"
+  borderRadius: "8px"
 };
 
 const cardGrid = {
@@ -292,8 +314,8 @@ const miniCard = {
   background: "#f9fafb",
   padding: "12px",
   borderRadius: "10px",
-  cursor: "pointer",
-  border: "1px solid #eee"
+  border: "1px solid #eee",
+  cursor: "pointer"
 };
 
 export default ClientDetails;

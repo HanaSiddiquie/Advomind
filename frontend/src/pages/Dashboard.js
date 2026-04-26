@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { db } from "../firebase";
+import { db, auth, storage } from "../firebase";
 import { collection, getDocs, query, where } from "firebase/firestore";
 
 function Dashboard() {
