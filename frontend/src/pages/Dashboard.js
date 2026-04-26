@@ -51,28 +51,30 @@ function Dashboard() {
     try {
       if (!court || !userId) return;
 
-      // CLIENTS (FIXED)
-      const clientsQ = query(
-  collection(db, "users", userId, "clients")
-);
+      // ✅ CLIENTS (FIXED WITH COURT FILTER)
+      const clientsSnap = await getDocs(
+        collection(db, "users", userId, "clients")
+      );
 
-const clientsSnap = await getDocs(clientsQ);
+      const clientsCount = clientsSnap.docs.filter(
+        d => d.data().court_type === court
+      ).length;
 
-      // CASES
+      // ✅ CASES
       const casesQ = query(
         collection(db, "cases"),
         where("court_type", "==", court),
         where("userId", "==", userId)
       );
-      const casesSnap = await getDocs(casesQ);
 
+      const casesSnap = await getDocs(casesQ);
       const caseIds = casesSnap.docs.map(d => d.id);
 
-      // HEARINGS
+      // ✅ HEARINGS
       const hearingsCount = await getHearingsCount(caseIds);
 
       setStats({
-        clients: clientsSnap.size,
+        clients: clientsCount, // ✅ FIXED
         cases: casesSnap.size,
         hearings: hearingsCount
       });
