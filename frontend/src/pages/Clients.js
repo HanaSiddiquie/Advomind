@@ -1,3 +1,4 @@
+// frontend/src/pages/Clients.js
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { db, auth } from "../firebase";
@@ -10,6 +11,11 @@ import {
   query,
   where
 } from "firebase/firestore";
+import { colors, font } from "../styles/theme";
+import PageContainer from "../components/ui/PageContainer";
+import Card from "../components/ui/Card";
+import Input from "../components/ui/Input";
+import Button from "../components/ui/Button";
 
 function Clients() {
   const [clients, setClients] = useState([]);
@@ -82,151 +88,124 @@ function Clients() {
 
   // ================= UI =================
   return (
-    <div style={page}>
-      <h2 style={title}>👤 Clients</h2>
-      <p style={subtitle}>Court: {court?.toUpperCase()}</p>
-
+    <PageContainer
+      eyebrow={court?.toUpperCase()}
+      title="Clients"
+      subtitle="Manage client records for this court"
+    >
       {/* FORM */}
-      <div style={card}>
-        <h3>Add Client</h3>
+      <Card style={{ marginBottom: 20 }}>
+        <h3 style={cardTitle}>Add Client</h3>
 
-        <input
-          placeholder="Name"
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          style={input}
-        />
+        <div style={formRow}>
+          <Input
+            placeholder="Full name"
+            label="Name"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
 
-        <input
-          placeholder="CNIC"
-          value={form.cnic}
-          onChange={(e) => setForm({ ...form, cnic: e.target.value })}
-          style={input}
-        />
+          <Input
+            placeholder="42101-1234567-1"
+            label="CNIC"
+            value={form.cnic}
+            onChange={(e) => setForm({ ...form, cnic: e.target.value })}
+          />
 
-        <input
-          placeholder="Phone"
-          value={form.phone}
-          onChange={(e) => setForm({ ...form, phone: e.target.value })}
-          style={input}
-        />
+          <Input
+            placeholder="03xx-xxxxxxx"
+            label="Phone"
+            value={form.phone}
+            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+          />
+        </div>
 
-        <button onClick={handleSubmit} style={btn}>
+        <Button onClick={handleSubmit} full>
           Add Client
-        </button>
-      </div>
+        </Button>
+      </Card>
 
       {/* SEARCH */}
-      <input
-        placeholder="Search by name or CNIC..."
+      <Input
+        placeholder="Search by name or CNIC…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        style={searchBox}
+        style={{ marginBottom: 6 }}
       />
 
       {/* LIST */}
       <div style={grid}>
         {filteredClients.length === 0 ? (
-          <p style={{ color: "#666" }}>No clients found</p>
+          <p style={emptyText}>No clients found</p>
         ) : (
           filteredClients.map(c => (
-            <div key={c.id} style={cardBox}>
-              
+            <Card key={c.id} hoverable style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+
               <div
                 style={{ cursor: "pointer" }}
                 onClick={() => navigate(`/clients/${c.id}`)}
               >
-                <h3>{c.name}</h3>
+                <h3 style={clientName}>{c.name}</h3>
                 <p style={meta}>CNIC: {c.cnic}</p>
-                {c.phone && <p style={meta}>📞 {c.phone}</p>}
+                {c.phone && <p style={meta}>{c.phone}</p>}
               </div>
 
-              <button
+              <Button
+                variant="danger"
                 onClick={() => handleDelete(c.id)}
-                style={danger}
+                full
+                style={{ marginTop: 14 }}
               >
                 Delete
-              </button>
-            </div>
+              </Button>
+            </Card>
           ))
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 }
 
 /* ================= STYLES ================= */
 
-const page = {
-  padding: 20,
-  background: "#f5f6fa",
-  minHeight: "100vh"
+const cardTitle = {
+  fontFamily: font.display,
+  fontSize: "16px",
+  fontWeight: 600,
+  color: colors.ink,
+  margin: "0 0 16px",
 };
 
-const title = { marginBottom: "5px" };
-
-const subtitle = { marginBottom: "15px", color: "#666" };
-
-const card = {
-  background: "#fff",
-  padding: 15,
-  borderRadius: 12,
-  marginBottom: 15,
-  boxShadow: "0 3px 10px rgba(0,0,0,0.05)"
-};
-
-const input = {
-  width: "100%",
-  padding: 10,
-  marginBottom: 10,
-  borderRadius: 8,
-  border: "1px solid #ddd"
-};
-
-const btn = {
-  width: "100%",
-  padding: 10,
-  background: "#111",
-  color: "#fff",
-  border: "none",
-  borderRadius: 10
-};
-
-const searchBox = {
-  width: "100%",
-  padding: 10,
-  marginBottom: 15,
-  borderRadius: 10,
-  border: "1px solid #ddd"
+const formRow = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+  gap: "0 14px",
 };
 
 const grid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-  gap: 12
+  gap: 14,
+  marginTop: 20,
 };
 
-const cardBox = {
-  background: "#fff",
-  padding: 15,
-  borderRadius: 12,
-  boxShadow: "0 2px 8px rgba(0,0,0,0.05)"
+const clientName = {
+  fontFamily: font.display,
+  fontSize: "15px",
+  fontWeight: 600,
+  color: colors.ink,
+  margin: "0 0 6px",
 };
 
 const meta = {
   fontSize: 13,
-  color: "#666",
-  marginTop: 3
+  color: colors.slate,
+  margin: "2px 0",
 };
 
-const danger = {
-  marginTop: 10,
-  width: "100%",
-  padding: 8,
-  background: "red",
-  color: "#fff",
-  border: "none",
-  borderRadius: 8
+const emptyText = {
+  color: colors.slate,
+  fontSize: "13px",
 };
 
 export default Clients;

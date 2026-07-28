@@ -1,3 +1,4 @@
+// frontend/src/pages/ClientDetails.js
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { db, auth } from "../firebase";
@@ -11,6 +12,12 @@ import {
   query,
   where
 } from "firebase/firestore";
+import { colors, font, radius } from "../styles/theme";
+import PageContainer from "../components/ui/PageContainer";
+import Card from "../components/ui/Card";
+import Input from "../components/ui/Input";
+import Button from "../components/ui/Button";
+import Badge from "../components/ui/Badge";
 
 function ClientDetails() {
   const { id } = useParams();
@@ -65,7 +72,7 @@ function ClientDetails() {
     }
   };
 
-  /* ================= CASES (ROBUST FIX) ================= */
+  /* ================= CASES ================= */
   const fetchCases = async (uid) => {
     if (!uid || !court || !id) return;
 
@@ -144,8 +151,8 @@ function ClientDetails() {
   };
 
   /* ================= LOADING ================= */
-  if (loading) return <div style={page}>Loading...</div>;
-  if (!client) return <div style={page}>Client not found</div>;
+  if (loading) return <PageContainer title="Client Dashboard"><p style={emptyText}>Loading…</p></PageContainer>;
+  if (!client) return <PageContainer title="Client Dashboard"><p style={emptyText}>Client not found</p></PageContainer>;
 
   const clientCaseIds = cases.map(c => c.id);
 
@@ -154,167 +161,183 @@ function ClientDetails() {
   );
 
   return (
-    <div style={page}>
-      <h2 style={title}>👤 Client Dashboard</h2>
-
+    <PageContainer eyebrow={court?.toUpperCase()} title={client.name || "Client Dashboard"}>
       <div style={grid}>
 
         {/* CLIENT INFO */}
-        <div style={card}>
+        <Card>
           <h3 style={cardTitle}>Client Information</h3>
 
-          <input style={input} value={form.name}
+          <Input label="Full Name" value={form.name}
             onChange={e => setForm({ ...form, name: e.target.value })}
-            placeholder="Full Name"
+            placeholder="Full name"
           />
 
-          <input style={input} value={form.cnic}
+          <Input label="CNIC" value={form.cnic}
             onChange={e => setForm({ ...form, cnic: e.target.value })}
             placeholder="CNIC"
           />
 
-          <input style={input} value={form.address}
+          <Input label="Address" value={form.address}
             onChange={e => setForm({ ...form, address: e.target.value })}
             placeholder="Address"
           />
 
-          <input style={input} value={form.email}
+          <Input label="Email" value={form.email}
             onChange={e => setForm({ ...form, email: e.target.value })}
             placeholder="Email"
           />
 
-          <button style={btn} onClick={updateClient}>
+          <Button onClick={updateClient} full>
             Save Changes
-          </button>
-        </div>
+          </Button>
+        </Card>
 
         {/* ADD CASE */}
-        <div style={card}>
-          <h3 style={cardTitle}>➕ Add Case</h3>
+        <Card>
+          <h3 style={cardTitle}>Add Case</h3>
 
-          <input style={input}
+          <Input label="Case Title"
             value={caseForm.title}
             onChange={e => setCaseForm({ ...caseForm, title: e.target.value })}
-            placeholder="Case Title"
+            placeholder="Case title"
           />
 
-          <textarea style={textarea}
+          <label style={selectLabel}>Description</label>
+          <textarea
+            className="am-input"
+            style={textareaStyle}
             value={caseForm.description}
             onChange={e => setCaseForm({ ...caseForm, description: e.target.value })}
-            placeholder="Case Description"
+            placeholder="Case description"
           />
 
-          <button style={btn} onClick={addCase}>
+          <Button onClick={addCase} full>
             Create Case
-          </button>
-        </div>
+          </Button>
+        </Card>
 
       </div>
 
       {/* CASES */}
-      <div style={card}>
-        <h3 style={cardTitle}>⚖️ Cases</h3>
+      <Card style={{ marginTop: 20 }}>
+        <h3 style={cardTitle}>Cases</h3>
 
         <div style={cardGrid}>
           {cases.length === 0 ? (
-            <p style={{ color: "#888" }}>No cases found for this client</p>
+            <p style={emptyText}>No cases found for this client</p>
           ) : (
             cases.map(c => (
               <div
                 key={c.id}
+                className="am-card-hover"
                 style={miniCard}
                 onClick={() => navigate(`/cases/${c.id}`)}
               >
-                <h4>{c.title}</h4>
-                <p style={{ color: "#888" }}>{c.status}</p>
+                <h4 style={miniCardTitle}>{c.title}</h4>
+                <Badge tone="accent">{c.status}</Badge>
               </div>
             ))
           )}
         </div>
-      </div>
+      </Card>
 
       {/* HEARINGS */}
-      <div style={card}>
-        <h3 style={cardTitle}>📅 Hearings</h3>
+      <Card style={{ marginTop: 20 }}>
+        <h3 style={cardTitle}>Hearings</h3>
 
         {clientHearings.length === 0 ? (
-          <p style={{ color: "#888" }}>No hearings</p>
+          <p style={emptyText}>No hearings</p>
         ) : (
-          clientHearings.map(h => (
-            <div key={h.id} style={miniCard}>
-              <h4>{h.event}</h4>
-              <p style={{ color: "#888" }}>{h.date}</p>
-            </div>
-          ))
+          <div style={cardGrid}>
+            {clientHearings.map(h => (
+              <div key={h.id} style={miniCard}>
+                <h4 style={miniCardTitle}>{h.event}</h4>
+                <p style={miniCardMeta}>{h.date}</p>
+              </div>
+            ))}
+          </div>
         )}
-      </div>
+      </Card>
 
-    </div>
+    </PageContainer>
   );
 }
 
 /* ================= STYLES ================= */
 
-const page = {
-  padding: "25px",
-  background: "#f4f5f7",
-  minHeight: "100vh"
-};
-
-const title = { marginBottom: "20px" };
-
 const grid = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
-  gap: "20px"
+  gap: "20px",
 };
 
-const card = {
-  background: "#ffffff",
-  padding: "20px",
-  borderRadius: "12px",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.06)"
+const cardTitle = {
+  fontFamily: font.display,
+  fontSize: "16px",
+  fontWeight: 600,
+  color: colors.ink,
+  margin: "0 0 16px",
 };
 
-const cardTitle = { marginBottom: "15px" };
+const selectLabel = {
+  display: "block",
+  fontFamily: font.body,
+  fontSize: "12px",
+  fontWeight: 600,
+  color: colors.slate,
+  marginBottom: "6px",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
 
-const input = {
+const textareaStyle = {
+  boxSizing: "border-box",
   width: "100%",
-  padding: "10px",
-  marginBottom: "10px",
-  borderRadius: "8px",
-  border: "1px solid #ddd"
-};
-
-const textarea = {
-  width: "100%",
-  padding: "10px",
-  height: "80px",
-  marginBottom: "10px",
-  borderRadius: "8px",
-  border: "1px solid #ddd"
-};
-
-const btn = {
-  padding: "10px 15px",
-  background: "#1f2937",
-  color: "white",
-  border: "none",
-  borderRadius: "8px"
+  padding: "11px 13px",
+  marginBottom: "14px",
+  minHeight: "80px",
+  resize: "vertical",
+  fontFamily: font.body,
+  fontSize: "14px",
+  color: colors.ink,
+  background: colors.surface,
+  border: `1px solid ${colors.hairline}`,
+  borderRadius: radius.sm,
+  outline: "none",
 };
 
 const cardGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-  gap: "10px"
+  gap: "10px",
 };
 
 const miniCard = {
-  background: "#f9fafb",
-  padding: "12px",
-  borderRadius: "10px",
-  border: "1px solid #eee",
-  cursor: "pointer"
+  background: colors.paper,
+  padding: "14px",
+  borderRadius: radius.sm,
+  border: `1px solid ${colors.hairline}`,
+  cursor: "pointer",
+};
+
+const miniCardTitle = {
+  fontFamily: font.display,
+  fontSize: "14px",
+  fontWeight: 600,
+  color: colors.ink,
+  margin: "0 0 6px",
+};
+
+const miniCardMeta = {
+  fontSize: "12px",
+  color: colors.slate,
+  margin: 0,
+};
+
+const emptyText = {
+  color: colors.slate,
+  fontSize: "13px",
 };
 
 export default ClientDetails;

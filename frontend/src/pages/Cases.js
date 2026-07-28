@@ -1,3 +1,4 @@
+// frontend/src/pages/Cases.js
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { db, auth } from "../firebase";
@@ -10,6 +11,12 @@ import {
   query,
   where
 } from "firebase/firestore";
+import { colors, font, radius, shadow } from "../styles/theme";
+import PageContainer from "../components/ui/PageContainer";
+import Card from "../components/ui/Card";
+import Input from "../components/ui/Input";
+import Button from "../components/ui/Button";
+import Badge from "../components/ui/Badge";
 
 function Cases() {
   const [cases, setCases] = useState({ active: [], archived: [] });
@@ -39,21 +46,18 @@ function Cases() {
     if (!userId || !court) return;
 
     try {
-      // CASES
       const caseQ = query(
         collection(db, "cases"),
         where("userId", "==", userId),
         where("court_type", "==", court)
       );
 
-      // ARCHIVE
       const archiveQ = query(
         collection(db, "archive"),
         where("userId", "==", userId),
         where("court_type", "==", court)
       );
 
-      // ✅ FIX: CLIENTS FROM USER SUBCOLLECTION
       const clientQ = collection(db, "users", userId, "clients");
 
       const [caseSnap, archiveSnap, clientSnap] = await Promise.all([
@@ -67,7 +71,6 @@ function Cases() {
 
       setCases({ active, archived });
 
-      // ✅ FILTER CLIENTS BY COURT (IMPORTANT)
       const filteredClients = clientSnap.docs
         .map(d => ({ id: d.id, ...d.data() }))
         .filter(c => c.court_type === court);
@@ -147,22 +150,23 @@ function Cases() {
   };
 
   return (
-    <div style={page}>
-      <h2 style={title}>📁 Cases</h2>
-      <p style={subtitle}>Court: {court?.toUpperCase()}</p>
-
+    <PageContainer
+      eyebrow={court?.toUpperCase()}
+      title="Cases"
+      subtitle="Manage active case files and view your archive"
+    >
       {/* FORM */}
-      <div style={card}>
-        <h3>Add New Case</h3>
+      <Card style={{ marginBottom: 28 }}>
+        <h3 style={sectionTitle}>Add New Case</h3>
 
+        <label style={selectLabel}>Client</label>
         <select
-          style={input}
+          className="am-input"
+          style={selectStyle}
           value={form.client_id}
-          onChange={(e) =>
-            setForm({ ...form, client_id: e.target.value })
-          }
+          onChange={(e) => setForm({ ...form, client_id: e.target.value })}
         >
-          <option value="">Select Client</option>
+          <option value="">Select client</option>
 
           {clients.length === 0 ? (
             <option disabled>No clients found</option>
@@ -175,98 +179,157 @@ function Cases() {
           )}
         </select>
 
-        <input
-          placeholder="Case Title"
+        <Input
+          label="Case Title"
+          placeholder="e.g. Ahmed vs. Metro Properties"
           value={form.title}
-          onChange={(e) =>
-            setForm({ ...form, title: e.target.value })
-          }
-          style={input}
+          onChange={(e) => setForm({ ...form, title: e.target.value })}
         />
 
+        <label style={selectLabel}>Description</label>
         <textarea
-          placeholder="Description"
+          className="am-input"
+          placeholder="Brief summary of the case…"
           value={form.description}
-          onChange={(e) =>
-            setForm({ ...form, description: e.target.value })
-          }
-          style={input}
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
+          style={textareaStyle}
         />
 
-        <button onClick={handleSubmit} style={btn}>
-          Add Case
-        </button>
-      </div>
+        <Button onClick={handleSubmit} full>Add Case</Button>
+      </Card>
 
       {/* ACTIVE */}
-      <h3 style={{ marginTop: 20 }}>🟢 Active Cases</h3>
+      <h3 style={groupTitle}>Active Cases</h3>
 
       <div style={grid}>
         {cases.active.length === 0 ? (
-          <p>No active cases</p>
+          <p style={emptyText}>No active cases</p>
         ) : (
           cases.active.map(c => (
-            <div key={c.id} style={cardBox}>
-              <div onClick={() => navigate(`/cases/${c.id}`)}>
-                <h3>{c.title}</h3>
-                <p>{c.status}</p>
+            <Card key={c.id} hoverable style={caseCard}>
+              <div onClick={() => navigate(`/cases/${c.id}`)} style={{ cursor: "pointer" }}>
+                <h3 style={caseTitle}>{c.title}</h3>
+                <Badge tone="accent">{c.status}</Badge>
               </div>
 
-              <button onClick={() => archiveCase(c)} style={btn}>
-                Archive
-              </button>
-
-              <button onClick={() => handleDelete(c.id)} style={danger}>
-                Delete
-              </button>
-            </div>
+              <div style={cardActions}>
+                <Button variant="secondary" onClick={() => archiveCase(c)} style={{ flex: 1 }}>
+                  Archive
+                </Button>
+                <Button variant="danger" onClick={() => handleDelete(c.id)} style={{ flex: 1 }}>
+                  Delete
+                </Button>
+              </div>
+            </Card>
           ))
         )}
       </div>
 
       {/* ARCHIVED */}
-      <h3 style={{ marginTop: 30 }}>📦 Archived Cases</h3>
+      <h3 style={groupTitle}>Archived Cases</h3>
 
       <div style={grid}>
         {cases.archived.length === 0 ? (
-          <p>No archived cases</p>
+          <p style={emptyText}>No archived cases</p>
         ) : (
           cases.archived.map(c => (
-            <div key={c.id} style={{ ...cardBox, opacity: 0.7 }}>
-              <h3>{c.title}</h3>
-              <p>Archived</p>
+            <Card key={c.id} style={{ ...caseCard, opacity: 0.75 }}>
+              <h3 style={caseTitle}>{c.title}</h3>
+              <Badge tone="neutral">Archived</Badge>
 
-              <button
+              <Button
+                variant="dark"
                 onClick={() => restoreCase(c)}
-                style={{
-                  marginTop: 10,
-                  width: "100%",
-                  padding: 8,
-                  background: "green",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 8
-                }}
+                full
+                style={{ marginTop: 14 }}
               >
                 Restore
-              </button>
-            </div>
+              </Button>
+            </Card>
           ))
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 }
 
-/* styles unchanged */
-const page = { padding: 20, background: "#f5f6fa", minHeight: "100vh" };
-const title = { marginBottom: 5 };
-const subtitle = { marginBottom: 15, color: "#666" };
-const card = { background: "#fff", padding: 15, borderRadius: 12, marginBottom: 15 };
-const input = { width: "100%", padding: 10, marginBottom: 10 };
-const btn = { width: "100%", padding: 10, background: "#111", color: "#fff" };
-const grid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 };
-const cardBox = { background: "#fff", padding: 15, borderRadius: 12 };
-const danger = { marginTop: 10, width: "100%", padding: 8, background: "red", color: "#fff" };
+/* ================= STYLES ================= */
+
+const sectionTitle = {
+  fontFamily: font.display,
+  fontSize: "16px",
+  fontWeight: 600,
+  color: colors.ink,
+  margin: "0 0 16px",
+};
+
+const groupTitle = {
+  fontFamily: font.display,
+  fontSize: "15px",
+  fontWeight: 600,
+  color: colors.ink,
+  margin: "28px 0 14px",
+};
+
+const selectLabel = {
+  display: "block",
+  fontFamily: font.body,
+  fontSize: "12px",
+  fontWeight: 600,
+  color: colors.slate,
+  marginBottom: "6px",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
+
+const selectStyle = {
+  boxSizing: "border-box",
+  width: "100%",
+  padding: "11px 13px",
+  marginBottom: "14px",
+  fontFamily: font.body,
+  fontSize: "14px",
+  color: colors.ink,
+  background: colors.surface,
+  border: `1px solid ${colors.hairline}`,
+  borderRadius: radius.sm,
+  outline: "none",
+};
+
+const textareaStyle = {
+  ...selectStyle,
+  minHeight: "80px",
+  resize: "vertical",
+  fontFamily: font.body,
+};
+
+const grid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+  gap: 14,
+};
+
+const caseCard = {
+  boxShadow: shadow.sm,
+};
+
+const caseTitle = {
+  fontFamily: font.display,
+  fontSize: "15px",
+  fontWeight: 600,
+  color: colors.ink,
+  margin: "0 0 8px",
+};
+
+const cardActions = {
+  display: "flex",
+  gap: 8,
+  marginTop: 14,
+};
+
+const emptyText = {
+  color: colors.slate,
+  fontSize: "13px",
+};
 
 export default Cases;

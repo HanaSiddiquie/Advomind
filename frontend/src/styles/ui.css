@@ -1,0 +1,52 @@
+/* frontend/src/styles/ui.css */
+/* ADVOMIND shared interaction states */
+
+.am-input:focus {
+  border-color: #7A2E33 !important;
+  box-shadow: 0 0 0 3px rgba(122, 46, 51, 0.12);
+}
+
+.am-btn {
+  cursor: pointer;
+}
+.am-btn:hover {
+  filter: brightness(1.08);
+}
+.am-btn:active {
+  filter: brightness(0.95);
+  transform: translateY(1px);
+}
+.am-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: none;
+  transform: none;
+}
+
+.am-card-hover {
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.am-card-hover:hover {
+  border-color: #7A2E33;
+  box-shadow: 0 6px 20px rgba(26,26,29,0.10);
+}
+
+.am-nav-link {
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.am-nav-link:hover {
+  background: #2A2A2E !important;
+}
+.am-nav-link.active {
+  background: #7A2E33 !important;
+  color: #fff !important;
+}
+
+.am-court-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.am-court-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(26,26,29,0.16);
+  border-color: #7A2E33;
+}

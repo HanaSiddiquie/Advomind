@@ -1,7 +1,13 @@
+// frontend/src/pages/HearingDetails.js
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { db, auth } from "../firebase";
 import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { colors, font } from "../styles/theme";
+import PageContainer from "../components/ui/PageContainer";
+import Card from "../components/ui/Card";
+import Input from "../components/ui/Input";
+import Button from "../components/ui/Button";
 
 function HearingDetails() {
   const { id } = useParams();
@@ -27,7 +33,7 @@ function HearingDetails() {
     return () => unsub();
   }, []);
 
-  // ================= FETCH HEARING (FIXED) =================
+  // ================= FETCH HEARING =================
   const fetchHearing = async () => {
     if (!userId || !courtType || !id) return;
 
@@ -40,7 +46,7 @@ function HearingDetails() {
 
     const data = snap.data();
 
-    // 🔒 SECURITY CHECK (VERY IMPORTANT)
+    // 🔒 SECURITY CHECK
     if (data.userId !== userId || data.court_type !== courtType) {
       setHearing(null);
       return;
@@ -78,83 +84,95 @@ function HearingDetails() {
 
   if (!hearing) {
     return (
-      <div style={{ padding: 20 }}>
-        <h3>❌ Hearing not found or not accessible</h3>
-      </div>
+      <PageContainer title="Hearing Details">
+        <p style={emptyText}>Hearing not found or not accessible</p>
+      </PageContainer>
     );
   }
 
   return (
-    <div style={{ padding: 20, background: "#f5f6fa", minHeight: "100vh" }}>
-      
-      <h2>⚖️ Hearing Details</h2>
-<p style={{ color: "gray" }}>
-  {hearing.date} • {hearing.event}
-</p>
-
-      <div style={card}>
-        <input
-          style={input}
+    <PageContainer
+      eyebrow={courtType?.toUpperCase()}
+      title="Hearing Details"
+      subtitle={`${hearing.date} · ${hearing.event}`}
+    >
+      <Card style={{ maxWidth: 480 }}>
+        <Input
+          label="Event"
           value={form.event}
           onChange={(e) => setForm({ ...form, event: e.target.value })}
           placeholder="Event"
         />
 
-        <input
-          style={input}
+        <Input
+          label="Date"
           type="date"
           value={form.date}
           onChange={(e) => setForm({ ...form, date: e.target.value })}
         />
 
+        <label style={selectLabel}>Notes</label>
         <textarea
-          style={input}
+          className="am-input"
+          style={textareaStyle}
           value={form.notes}
           onChange={(e) => setForm({ ...form, notes: e.target.value })}
           placeholder="Notes"
         />
 
-        <input
-          style={input}
+        <Input
+          label="Reminder"
           value={form.reminder}
           onChange={(e) => setForm({ ...form, reminder: e.target.value })}
           placeholder="Reminder"
         />
 
-        <div style={{ display: "flex", gap: 10 }}>
-          <button style={btn} onClick={updateHearing}>
+        <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+          <Button onClick={updateHearing} style={{ flex: 1 }}>
             Save
-          </button>
+          </Button>
 
-          <button style={{ ...btn, background: "red" }} onClick={deleteHearing}>
+          <Button variant="danger" onClick={deleteHearing} style={{ flex: 1 }}>
             Delete
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+      </Card>
+    </PageContainer>
   );
 }
 
-const card = {
-  background: "#fff",
-  padding: 20,
-  borderRadius: 12
+/* ================= STYLES ================= */
+
+const selectLabel = {
+  display: "block",
+  fontFamily: font.body,
+  fontSize: "12px",
+  fontWeight: 600,
+  color: colors.slate,
+  marginBottom: "6px",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
 };
 
-const input = {
+const textareaStyle = {
+  boxSizing: "border-box",
   width: "100%",
-  padding: 10,
-  marginBottom: 10,
-  borderRadius: 8,
-  border: "1px solid #ddd"
+  padding: "11px 13px",
+  marginBottom: "14px",
+  minHeight: "80px",
+  resize: "vertical",
+  fontFamily: font.body,
+  fontSize: "14px",
+  color: colors.ink,
+  background: colors.surface,
+  border: `1px solid ${colors.hairline}`,
+  borderRadius: "6px",
+  outline: "none",
 };
 
-const btn = {
-  padding: 10,
-  background: "#111",
-  color: "#fff",
-  border: "none",
-  borderRadius: 8
+const emptyText = {
+  color: colors.slate,
+  fontSize: "13px",
 };
 
 export default HearingDetails;

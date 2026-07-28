@@ -1,7 +1,13 @@
+// frontend/src/pages/ArchivePage.js
 import { useEffect, useState } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db, auth } from "../firebase";
 import { useNavigate } from "react-router-dom";
+import { colors, font } from "../styles/theme";
+import PageContainer from "../components/ui/PageContainer";
+import Card from "../components/ui/Card";
+import Button from "../components/ui/Button";
+import Badge from "../components/ui/Badge";
 
 function ArchivePage() {
   const [userId, setUserId] = useState(null);
@@ -42,87 +48,71 @@ function ArchivePage() {
   }, [userId]);
 
   return (
-    <div style={page}>
-      <h2 style={title}>📁 Archived Cases</h2>
-
+    <PageContainer title="Archived Cases" subtitle="Closed cases across all courts">
       {cases.length === 0 ? (
-        <div style={empty}>No archived cases found</div>
+        <p style={emptyText}>No archived cases found</p>
       ) : (
         <div style={grid}>
           {cases.map(c => (
-            <div key={c.id} style={card}>
-              
-              <h3>{c.title || "Untitled Case"}</h3>
+            <Card key={c.id}>
+              <h3 style={caseTitle}>{c.title || "Untitled Case"}</h3>
 
-              <p>
-                <b>Status:</b> {c.status}
-              </p>
+              <p style={row}><span style={label}>Status</span> {c.status}</p>
+              <p style={row}><span style={label}>Court</span> {c.court_type?.toUpperCase() || c.courtType || "N/A"}</p>
 
-              <p>
-                <b>Court:</b> {c.courtType || "N/A"}
-              </p>
+              <div style={{ margin: "10px 0 4px" }}>
+                <Badge tone="neutral">
+                  Archived {c.archivedAt ? new Date(c.archivedAt).toLocaleDateString() : "date unknown"}
+                </Badge>
+              </div>
 
-              <p style={{ fontSize: 12, opacity: 0.7 }}>
-                Archived:{" "}
-                {c.archivedAt
-                  ? new Date(c.archivedAt).toLocaleString()
-                  : "Unknown"}
-              </p>
-
-              <button
-                style={btn}
-                onClick={() => navigate(`/case/${c.originalCaseId}`)}
+              <Button
+                variant="dark"
+                full
+                style={{ marginTop: 12 }}
+                onClick={() => navigate(`/cases/${c.originalCaseId}`)}
               >
                 View Case
-              </button>
-
-            </div>
+              </Button>
+            </Card>
           ))}
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }
 
 /* ========== STYLES ========== */
 
-const page = {
-  padding: 25,
-  background: "#f3f4f6",
-  minHeight: "100vh"
-};
-
-const title = {
-  marginBottom: 20
-};
-
 const grid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
-  gap: 15
+  gap: 14,
 };
 
-const card = {
-  background: "#fff",
-  padding: 15,
-  borderRadius: 10,
-  boxShadow: "0 3px 10px rgba(0,0,0,0.08)"
+const caseTitle = {
+  fontFamily: font.display,
+  fontSize: "15px",
+  fontWeight: 600,
+  color: colors.ink,
+  margin: "0 0 10px",
 };
 
-const btn = {
-  marginTop: 10,
-  padding: 8,
-  background: "#111",
-  color: "#fff",
-  border: "none",
-  borderRadius: 6,
-  cursor: "pointer"
+const row = {
+  fontSize: "13px",
+  color: colors.charcoal,
+  margin: "4px 0",
 };
 
-const empty = {
-  padding: 20,
-  background: "#fff",
-  borderRadius: 10
+const label = {
+  color: colors.slate,
+  fontWeight: 600,
+  marginRight: "4px",
+};
+
+const emptyText = {
+  color: colors.slate,
+  fontSize: "13px",
 };
 
 export default ArchivePage;

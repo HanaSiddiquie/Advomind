@@ -1,4 +1,12 @@
+// frontend/src/pages/CourtSelector.js
 import { useNavigate } from "react-router-dom";
+import { colors, font, radius, shadow } from "../styles/theme";
+
+const COURTS = [
+  { key: "civil", label: "Civil Court", desc: "Contracts, property, and civil disputes" },
+  { key: "session", label: "Session Court", desc: "Criminal trials and sessions matters" },
+  { key: "high", label: "High Court", desc: "Appeals and constitutional matters" },
+];
 
 function CourtSelector() {
   const navigate = useNavigate();
@@ -10,81 +18,103 @@ function CourtSelector() {
 
   return (
     <div style={container}>
-
       <div style={box}>
-        <h1 style={title}>🏛 Select Court</h1>
-        <p > </p>
+        <div style={eyebrow}>Before you continue</div>
+        <h1 style={title}>Select Court</h1>
+        <p style={subtitle}>Choose which court's caseload you'd like to work in.</p>
 
         <div style={cardContainer}>
-
-          <div style={card} onClick={() => selectCourt("civil")}>
-            ⚖️ Civil Court
-          </div>
-
-          <div style={card} onClick={() => selectCourt("session")}>
-            🏢 Session Court
-          </div>
-
-          <div style={card} onClick={() => selectCourt("high")}>
-            🏛 High Court
-          </div>
-
+          {COURTS.map((c) => (
+            <div
+              key={c.key}
+              className="am-court-card"
+              style={card}
+              onClick={() => selectCourt(c.key)}
+            >
+              <div style={cardLabel}>{c.label}</div>
+              <div style={cardDesc}>{c.desc}</div>
+            </div>
+          ))}
         </div>
       </div>
-
     </div>
   );
 }
 
-/* ================= THEME STYLES ================= */
+/* ================= STYLES ================= */
 
 const container = {
   height: "100vh",
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
-  background: "#e5e7eb" // soft grey theme
+  background: colors.paper,
+  fontFamily: font.body,
 };
 
 const box = {
   textAlign: "center",
-  background: "#ffffff",
-  padding: "40px",
-  borderRadius: "16px",
-  boxShadow: "0 12px 30px rgba(0,0,0,0.12)",
-  border: "1px solid #e5e7eb"
+  background: colors.surface,
+  padding: "44px 48px",
+  borderRadius: radius.lg,
+  boxShadow: shadow.lg,
+  border: `1px solid ${colors.hairline}`,
+  maxWidth: "640px",
+};
+
+const eyebrow = {
+  fontSize: "12px",
+  fontWeight: 700,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  color: colors.accent,
+  marginBottom: "8px",
 };
 
 const title = {
-  marginBottom: "6px",
-  fontSize: "26px",
-  fontWeight: "700",
-  color: "#111827"
+  margin: 0,
+  fontFamily: font.display,
+  fontSize: "28px",
+  fontWeight: 600,
+  color: colors.ink,
 };
 
 const subtitle = {
-  marginBottom: "25px",
+  marginTop: "8px",
+  marginBottom: "28px",
   fontSize: "14px",
-  color: "#6b7280"
+  color: colors.slate,
 };
 
 const cardContainer = {
   display: "flex",
-  gap: "20px",
+  gap: "16px",
   justifyContent: "center",
-  flexWrap: "wrap"
+  flexWrap: "wrap",
 };
 
 const card = {
-  padding: "22px 26px",
-  background: "#111827",
-  color: "white",
-  borderRadius: "12px",
+  padding: "24px 22px",
+  background: colors.ink,
+  color: colors.white,
+  borderRadius: radius.md,
   cursor: "pointer",
-  minWidth: "160px",
-  fontWeight: "600",
-  boxShadow: "0 6px 18px rgba(0,0,0,0.15)",
-  transition: "0.2s"
+  width: "180px",
+  textAlign: "left",
+  border: "1px solid transparent",
+};
+
+const cardLabel = {
+  fontFamily: font.display,
+  fontWeight: 600,
+  fontSize: "16px",
+  marginBottom: "6px",
+};
+
+const cardDesc = {
+  fontSize: "12px",
+  color: "#B7B8BC",
+  lineHeight: 1.4,
 };
 
 export default CourtSelector;

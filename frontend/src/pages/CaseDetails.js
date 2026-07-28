@@ -1,3 +1,4 @@
+// frontend/src/pages/CaseDetails.js
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
@@ -20,6 +21,13 @@ import {
 } from "firebase/storage";
 
 import { db, storage, auth } from "../firebase";
+import { colors, font, radius } from "../styles/theme";
+import PageContainer from "../components/ui/PageContainer";
+import Card from "../components/ui/Card";
+import Input from "../components/ui/Input";
+import Button from "../components/ui/Button";
+
+const TABS = ["view", "details", "diary", "hearings", "files"];
 
 function CaseDetails() {
   const { id } = useParams();
@@ -116,18 +124,17 @@ function CaseDetails() {
     load();
   }, [caseId, userId]);
 
-  /* ================= UPDATE CASE (ARCHIVE FIX HERE) ================= */
+  /* ================= UPDATE CASE (ARCHIVE ON CLOSE) ================= */
   const updateCase = async () => {
     try {
       const caseRef = doc(db, "cases", caseId);
 
-      // 🚨 MOVE TO ARCHIVE IF CLOSED
       if (form.status === "Closed") {
         await addDoc(collection(db, "archive"), {
           ...form,
           originalCaseId: caseId,
           userId,
-          court_type: courtType,   // ✅ FIXED FIELD NAME
+          court_type: courtType,
           status: "Closed",
           archivedAt: Date.now()
         });
@@ -138,7 +145,6 @@ function CaseDetails() {
         return;
       }
 
-      // NORMAL UPDATE
       await updateDoc(caseRef, form);
       fetchCase(userId);
 
@@ -224,116 +230,120 @@ function CaseDetails() {
     (a, b) => new Date(a.date) - new Date(b.date)
   );
 
-  if (!caseData) return <div style={page}>Loading...</div>;
+  if (!caseData) return <PageContainer title="Case Dashboard"><p style={emptyText}>Loading…</p></PageContainer>;
 
   return (
-    <div style={page}>
-      <h2 style={title}>⚖️ Case Dashboard</h2>
+    <PageContainer eyebrow={courtType?.toUpperCase()} title={caseData.title || "Case Dashboard"}>
 
       <div style={tabs}>
-        {["view", "details", "diary", "hearings", "files"].map(t => (
+        {TABS.map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
+            className="am-btn"
             style={tab === t ? activeTab : tabBtn}
           >
-            {t.toUpperCase()}
+            {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
 
-      <div style={card}>
+      <Card>
 
         {/* VIEW */}
         {tab === "view" && (
           <div style={section}>
-            <input
+            <Input
+              label="Case Title"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
-              style={input}
             />
 
+            <label style={selectLabel}>Status</label>
             <select
+              className="am-input"
               value={form.status}
               onChange={(e) => setForm({ ...form, status: e.target.value })}
-              style={input}
+              style={selectStyle}
             >
-              <option value="">Select Status</option>
+              <option value="">Select status</option>
               <option>Open</option>
               <option>In Progress</option>
               <option>On Hold</option>
               <option>Closed</option>
             </select>
 
-            <button style={btn} onClick={updateCase}>
+            <Button onClick={updateCase} style={{ alignSelf: "flex-start" }}>
               Save Changes
-            </button>
+            </Button>
           </div>
         )}
 
         {/* DETAILS */}
         {tab === "details" && (
           <div style={section}>
+            <label style={selectLabel}>Details</label>
             <textarea
+              className="am-input"
               value={form.details}
               onChange={(e) => setForm({ ...form, details: e.target.value })}
-              style={input}
+              style={textareaStyle}
               rows={6}
             />
-            <button style={btn} onClick={updateCase}>Save Details</button>
+            <Button onClick={updateCase} style={{ alignSelf: "flex-start" }}>Save Details</Button>
           </div>
         )}
 
         {/* DIARY */}
         {tab === "diary" && (
           <div style={section}>
+            <label style={selectLabel}>Diary</label>
             <textarea
+              className="am-input"
               value={form.diary}
               onChange={(e) => setForm({ ...form, diary: e.target.value })}
-              style={input}
+              style={textareaStyle}
               rows={6}
             />
-            <button style={btn} onClick={updateCase}>Save Diary</button>
+            <Button onClick={updateCase} style={{ alignSelf: "flex-start" }}>Save Diary</Button>
           </div>
         )}
 
         {/* HEARINGS */}
         {tab === "hearings" && (
           <div style={section}>
-            <input
+            <Input
+              label="Date"
               type="date"
               value={hearingForm.date}
-              style={input}
-              onChange={(e) =>
-                setHearingForm({ ...hearingForm, date: e.target.value })
-              }
+              onChange={(e) => setHearingForm({ ...hearingForm, date: e.target.value })}
             />
 
-            <input
-              placeholder="Event"
+            <Input
+              label="Event"
+              placeholder="e.g. First hearing"
               value={hearingForm.event}
-              style={input}
-              onChange={(e) =>
-                setHearingForm({ ...hearingForm, event: e.target.value })
-              }
+              onChange={(e) => setHearingForm({ ...hearingForm, event: e.target.value })}
             />
 
+            <label style={selectLabel}>Notes</label>
             <textarea
+              className="am-input"
               placeholder="Notes"
               value={hearingForm.notes}
-              style={input}
-              onChange={(e) =>
-                setHearingForm({ ...hearingForm, notes: e.target.value })
-              }
+              onChange={(e) => setHearingForm({ ...hearingForm, notes: e.target.value })}
+              style={textareaStyle}
             />
 
-            <button style={btn} onClick={addHearing}>Add Hearing</button>
+            <Button onClick={addHearing} style={{ alignSelf: "flex-start", marginBottom: 8 }}>
+              Add Hearing
+            </Button>
 
             {sortedHearings.map(h => (
               <div key={h.id} style={item}>
-                <b>{h.event}</b>
-                <div>{h.date}</div>
-                <div>{h.notes}</div>
+                <div style={itemTitle}>{h.event}</div>
+                <div style={itemMeta}>{h.date}</div>
+                {h.notes && <div style={itemMeta}>{h.notes}</div>}
               </div>
             ))}
           </div>
@@ -342,38 +352,113 @@ function CaseDetails() {
         {/* FILES */}
         {tab === "files" && (
           <div style={section}>
-            <input type="file" onChange={(e) => setFile(e.target.files[0])} />
+            <input type="file" onChange={(e) => setFile(e.target.files[0])} style={{ marginBottom: 6 }} />
 
-            <button style={btn} onClick={uploadFile}>
-              {uploading ? "Uploading..." : "Upload File"}
-            </button>
+            <Button onClick={uploadFile} disabled={uploading} style={{ alignSelf: "flex-start" }}>
+              {uploading ? "Uploading…" : "Upload File"}
+            </Button>
 
             {files.map(f => (
-              <div key={f.id} style={item}>
-                <a href={f.url} target="_blank" rel="noreferrer">
+              <div key={f.id} style={{ ...item, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <a href={f.url} target="_blank" rel="noreferrer" style={fileLink}>
                   {f.name}
                 </a>
-                <button onClick={() => deleteFile(f)}>Delete</button>
+                <Button variant="danger" onClick={() => deleteFile(f)}>Delete</Button>
               </div>
             ))}
           </div>
         )}
 
-      </div>
-    </div>
+      </Card>
+    </PageContainer>
   );
 }
 
-/* styles unchanged */
-const page = { padding: 25, background: "#f3f4f6", minHeight: "100vh" };
-const title = { marginBottom: 15 };
-const tabs = { display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" };
-const tabBtn = { padding: 10, border: "1px solid #ddd", background: "#fff" };
-const activeTab = { ...tabBtn, background: "#111", color: "#fff" };
-const card = { background: "#fff", padding: 20, borderRadius: 12 };
-const section = { display: "flex", flexDirection: "column", gap: 10 };
-const input = { padding: 10, border: "1px solid #ddd", borderRadius: 8 };
-const btn = { padding: 10, background: "#111", color: "#fff", border: "none", borderRadius: 8 };
-const item = { padding: 10, border: "1px solid #eee", borderRadius: 8, marginTop: 10 };
+/* ================= STYLES ================= */
+
+const tabs = { display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" };
+
+const tabBtn = {
+  padding: "9px 16px",
+  border: `1px solid ${colors.hairline}`,
+  background: colors.surface,
+  color: colors.charcoal,
+  borderRadius: radius.sm,
+  fontFamily: font.body,
+  fontSize: "13px",
+  fontWeight: 600,
+};
+
+const activeTab = {
+  ...tabBtn,
+  background: colors.ink,
+  color: colors.white,
+  border: `1px solid ${colors.ink}`,
+};
+
+const section = { display: "flex", flexDirection: "column", gap: 4 };
+
+const selectLabel = {
+  display: "block",
+  fontFamily: font.body,
+  fontSize: "12px",
+  fontWeight: 600,
+  color: colors.slate,
+  marginBottom: "6px",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
+
+const selectStyle = {
+  boxSizing: "border-box",
+  width: "100%",
+  padding: "11px 13px",
+  marginBottom: "14px",
+  fontFamily: font.body,
+  fontSize: "14px",
+  color: colors.ink,
+  background: colors.surface,
+  border: `1px solid ${colors.hairline}`,
+  borderRadius: radius.sm,
+  outline: "none",
+};
+
+const textareaStyle = {
+  ...selectStyle,
+  resize: "vertical",
+};
+
+const item = {
+  padding: "12px 14px",
+  border: `1px solid ${colors.hairline}`,
+  borderRadius: radius.sm,
+  marginTop: 10,
+  background: colors.paper,
+};
+
+const itemTitle = {
+  fontFamily: font.display,
+  fontWeight: 600,
+  fontSize: "14px",
+  color: colors.ink,
+};
+
+const itemMeta = {
+  fontSize: "12px",
+  color: colors.slate,
+  marginTop: 2,
+};
+
+const fileLink = {
+  color: colors.accent,
+  fontSize: "13px",
+  fontWeight: 600,
+  textDecoration: "none",
+};
+
+const emptyText = {
+  color: colors.slate,
+  fontSize: "13px",
+};
 
 export default CaseDetails;

@@ -1,3 +1,4 @@
+// frontend/src/pages/Dashboard.js
 import { useEffect, useState } from "react";
 import { db, auth } from "../firebase";
 import {
@@ -6,6 +7,8 @@ import {
   query,
   where
 } from "firebase/firestore";
+import { colors, font, radius, shadow } from "../styles/theme";
+import PageContainer from "../components/ui/PageContainer";
 
 function Dashboard() {
   const court = localStorage.getItem("court");
@@ -51,7 +54,6 @@ function Dashboard() {
     try {
       if (!court || !userId) return;
 
-      // ✅ CLIENTS (FIXED WITH COURT FILTER)
       const clientsSnap = await getDocs(
         collection(db, "users", userId, "clients")
       );
@@ -60,7 +62,6 @@ function Dashboard() {
         d => d.data().court_type === court
       ).length;
 
-      // ✅ CASES
       const casesQ = query(
         collection(db, "cases"),
         where("court_type", "==", court),
@@ -70,11 +71,10 @@ function Dashboard() {
       const casesSnap = await getDocs(casesQ);
       const caseIds = casesSnap.docs.map(d => d.id);
 
-      // ✅ HEARINGS
       const hearingsCount = await getHearingsCount(caseIds);
 
       setStats({
-        clients: clientsCount, // ✅ FIXED
+        clients: clientsCount,
         cases: casesSnap.size,
         hearings: hearingsCount
       });
@@ -88,58 +88,69 @@ function Dashboard() {
     fetchStats();
   }, [court, userId]);
 
+  const cards = [
+    { label: "Clients", value: stats.clients },
+    { label: "Cases", value: stats.cases },
+    { label: "Hearings", value: stats.hearings },
+  ];
+
   return (
-    <div style={page}>
-
-      <h2>🏛 Dashboard Analytics</h2>
-
-      <p style={{ color: "gray" }}>
-        Current Court: <b>{court?.toUpperCase()}</b>
-      </p>
-
+    <PageContainer
+      eyebrow={court?.toUpperCase()}
+      title="Dashboard"
+      subtitle="An overview of your current caseload"
+    >
       <div style={grid}>
-
-        <div style={card}>
-          <h3>👤 Clients</h3>
-          <h1>{stats.clients}</h1>
-        </div>
-
-        <div style={card}>
-          <h3>📁 Cases</h3>
-          <h1>{stats.cases}</h1>
-        </div>
-
-        <div style={card}>
-          <h3>⚖️ Hearings</h3>
-          <h1>{stats.hearings}</h1>
-        </div>
-
+        {cards.map((c) => (
+          <div key={c.label} style={card}>
+            <div style={cardLabel}>{c.label}</div>
+            <div style={cardValue}>{c.value}</div>
+            <div style={cardRule} />
+          </div>
+        ))}
       </div>
-
-    </div>
+    </PageContainer>
   );
 }
 
 /* STYLES */
-const page = {
-  padding: "20px",
-  background: "#f5f6fa",
-  minHeight: "100vh"
-};
 
 const grid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-  gap: "15px",
-  marginTop: "20px"
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: "16px",
 };
 
 const card = {
-  background: "white",
-  padding: "20px",
-  borderRadius: "12px",
-  textAlign: "center",
-  boxShadow: "0 2px 6px rgba(0,0,0,0.05)"
+  background: colors.surface,
+  padding: "24px",
+  borderRadius: radius.md,
+  border: `1px solid ${colors.hairline}`,
+  boxShadow: shadow.sm,
+};
+
+const cardLabel = {
+  fontSize: "12px",
+  fontWeight: 700,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+  color: colors.slate,
+  marginBottom: "10px",
+};
+
+const cardValue = {
+  fontFamily: font.display,
+  fontSize: "40px",
+  fontWeight: 600,
+  color: colors.ink,
+};
+
+const cardRule = {
+  marginTop: "14px",
+  width: "28px",
+  height: "3px",
+  background: colors.accent,
+  borderRadius: "2px",
 };
 
 export default Dashboard;

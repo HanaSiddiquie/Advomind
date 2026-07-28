@@ -1,3 +1,4 @@
+// frontend/src/pages/Hearings.js
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { db, auth } from "../firebase";
@@ -8,6 +9,12 @@ import {
   query,
   where
 } from "firebase/firestore";
+import { colors, font, radius } from "../styles/theme";
+import PageContainer from "../components/ui/PageContainer";
+import Card from "../components/ui/Card";
+import Input from "../components/ui/Input";
+import Button from "../components/ui/Button";
+import Badge from "../components/ui/Badge";
 
 function Hearings() {
   const [hearings, setHearings] = useState([]);
@@ -50,11 +57,11 @@ function Hearings() {
 
       setCases(caseSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
+      // ✅ FIX: clients live under users/{uid}/clients, not a top-level collection
       const clientSnap = await getDocs(
         query(
-          collection(db, "clients"),
-          where("court_type", "==", courtType),
-          where("userId", "==", userId)
+          collection(db, "users", userId, "clients"),
+          where("court_type", "==", courtType)
         )
       );
 
@@ -130,20 +137,23 @@ function Hearings() {
 
   // ================= UI =================
   return (
-    <div style={page}>
-      <h2 style={title}>📅 Hearings Timeline</h2>
-      <p style={subtitle}>Court: {courtType?.toUpperCase()}</p>
-
+    <PageContainer
+      eyebrow={courtType?.toUpperCase()}
+      title="Hearings Timeline"
+      subtitle="Schedule and track upcoming hearings"
+    >
       {/* FORM */}
-      <div style={formCard}>
-        <h3 style={cardTitle}>➕ Add Hearing</h3>
+      <Card style={{ marginBottom: 25 }}>
+        <h3 style={cardTitle}>Add Hearing</h3>
 
+        <label style={selectLabel}>Case</label>
         <select
-          style={input}
+          className="am-input"
+          style={selectStyle}
           value={form.case_id}
           onChange={(e) => setForm({ ...form, case_id: e.target.value })}
         >
-          <option value="">Select Case</option>
+          <option value="">Select case</option>
           {cases.map(c => (
             <option key={c.id} value={c.id}>
               {c.title}
@@ -151,136 +161,143 @@ function Hearings() {
           ))}
         </select>
 
-        <input
-          style={input}
+        <Input
+          label="Date"
           type="date"
           value={form.date}
           onChange={(e) => setForm({ ...form, date: e.target.value })}
         />
 
-        <input
-          style={input}
-          placeholder="Event"
+        <Input
+          label="Event"
+          placeholder="e.g. First hearing"
           value={form.event}
           onChange={(e) => setForm({ ...form, event: e.target.value })}
         />
 
+        <label style={selectLabel}>Notes</label>
         <textarea
-          style={textarea}
+          className="am-input"
+          style={textareaStyle}
           placeholder="Notes"
           value={form.notes}
           onChange={(e) => setForm({ ...form, notes: e.target.value })}
         />
 
-        <button style={btn} onClick={handleSubmit}>
+        <Button onClick={handleSubmit} full>
           Add Hearing
-        </button>
-      </div>
+        </Button>
+      </Card>
 
       {/* TIMELINE */}
       <div style={timeline}>
         {sortedHearings.length === 0 ? (
-          <p style={{ color: "#666" }}>No hearings scheduled</p>
+          <p style={emptyText}>No hearings scheduled</p>
         ) : (
           sortedHearings.map(h => (
             <div
               key={h.id}
-              style={{ ...card, cursor: "pointer" }}
+              className="am-card-hover"
+              style={card}
               onClick={() => navigate(`/hearings/${h.id}`)}
             >
-              <div style={badge}>{h.date}</div>
+              <Badge tone="dark">{h.date}</Badge>
 
-              <h3 style={{ margin: "8px 0" }}>{h.event}</h3>
+              <h3 style={eventTitle}>{h.event}</h3>
 
-              <div style={meta}>📁 {getCaseTitle(h.case_id)}</div>
-              <div style={meta}>👤 {getClientName(h.case_id)}</div>
+              <div style={meta}>Case: {getCaseTitle(h.case_id)}</div>
+              <div style={meta}>Client: {getClientName(h.case_id)}</div>
 
               {h.notes && <div style={notes}>{h.notes}</div>}
             </div>
           ))
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 }
 
 /* ================= STYLES ================= */
 
-const page = {
-  padding: "20px",
-  minHeight: "100vh",
-  background: "#f4f6f8"
+const cardTitle = {
+  fontFamily: font.display,
+  fontSize: "16px",
+  fontWeight: 600,
+  color: colors.ink,
+  margin: "0 0 16px",
 };
 
-const title = { marginBottom: "5px" };
-const subtitle = { marginBottom: "15px", color: "#666" };
-
-const formCard = {
-  background: "#fff",
-  padding: "20px",
-  borderRadius: "14px",
-  marginBottom: "25px",
-  boxShadow: "0 4px 14px rgba(0,0,0,0.06)"
+const selectLabel = {
+  display: "block",
+  fontFamily: font.body,
+  fontSize: "12px",
+  fontWeight: 600,
+  color: colors.slate,
+  marginBottom: "6px",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
 };
 
-const cardTitle = { marginBottom: "15px" };
-
-const input = {
+const selectStyle = {
+  boxSizing: "border-box",
   width: "100%",
-  padding: "10px",
-  marginBottom: "10px",
-  borderRadius: "8px",
-  border: "1px solid #ddd"
+  padding: "11px 13px",
+  marginBottom: "14px",
+  fontFamily: font.body,
+  fontSize: "14px",
+  color: colors.ink,
+  background: colors.surface,
+  border: `1px solid ${colors.hairline}`,
+  borderRadius: radius.sm,
+  outline: "none",
 };
 
-const textarea = {
-  ...input,
-  height: "80px"
-};
-
-const btn = {
-  width: "100%",
-  padding: "10px",
-  background: "#111",
-  color: "#fff",
-  border: "none",
-  borderRadius: "10px",
-  cursor: "pointer"
+const textareaStyle = {
+  ...selectStyle,
+  minHeight: "80px",
+  resize: "vertical",
 };
 
 const timeline = {
   display: "flex",
   flexDirection: "column",
-  gap: "12px"
+  gap: "12px",
 };
 
 const card = {
-  background: "#fff",
-  padding: "15px",
-  borderRadius: "14px",
-  borderLeft: "5px solid #111",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.05)"
+  background: colors.surface,
+  padding: "16px 18px",
+  borderRadius: radius.md,
+  borderLeft: `4px solid ${colors.accent}`,
+  border: `1px solid ${colors.hairline}`,
+  borderLeftWidth: "4px",
+  borderLeftColor: colors.accent,
+  cursor: "pointer",
 };
 
-const badge = {
-  fontSize: "12px",
-  color: "#fff",
-  background: "#111",
-  display: "inline-block",
-  padding: "3px 8px",
-  borderRadius: "6px"
+const eventTitle = {
+  fontFamily: font.display,
+  fontSize: "16px",
+  fontWeight: 600,
+  color: colors.ink,
+  margin: "10px 0 6px",
 };
 
 const meta = {
   fontSize: "13px",
-  color: "#666",
-  marginTop: "4px"
+  color: colors.slate,
+  marginTop: "2px",
 };
 
 const notes = {
   marginTop: "8px",
-  color: "#333",
-  fontSize: "14px"
+  color: colors.charcoal,
+  fontSize: "13px",
+};
+
+const emptyText = {
+  color: colors.slate,
+  fontSize: "13px",
 };
 
 export default Hearings;

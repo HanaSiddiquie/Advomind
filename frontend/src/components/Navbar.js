@@ -1,9 +1,23 @@
-import { Link, useNavigate } from "react-router-dom";
+// frontend/src/components/Navbar.js
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth } from "../firebase";
+import { colors, font } from "../styles/theme";
+import Button from "./ui/Button";
+
+const NAV_LINKS = [
+  { to: "/dashboard", label: "Dashboard" },
+  { to: "/clients", label: "Clients" },
+  { to: "/cases", label: "Cases" },
+  { to: "/hearings", label: "Hearings" },
+  { to: "/diary", label: "Diary" },
+  { to: "/archive", label: "Archive" },
+];
 
 function Navbar() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const court = localStorage.getItem("court");
 
   const logout = async () => {
     await signOut(auth);
@@ -11,67 +25,42 @@ function Navbar() {
     navigate("/auth");
   };
 
-  const court = localStorage.getItem("court");
-
   return (
     <div style={nav}>
-
       {/* LEFT: BRAND */}
       <div style={left}>
-        <h2 style={{ margin: 0, color: "white" }}>⚖️ ADVOMIND</h2>
-
-        {court && (
-          <span style={courtTag}>
-            🏛 {court.toUpperCase()}
-          </span>
-        )}
+        <h2 style={brand}>⚖ ADVOMIND</h2>
+        {court && <span style={courtTag}>{court.toUpperCase()} COURT</span>}
       </div>
 
       {/* CENTER LINKS */}
       <div style={center}>
-        <Link to="/dashboard" style={link}>Dashboard</Link>
-        <Link to="/clients" style={link}>Clients</Link>
-        <Link to="/cases" style={link}>Cases</Link>
-        <Link to="/hearings" style={link}>Hearings</Link>
-        <Link
-  to="/diary"
-  style={diaryBtn}
-  onMouseOver={(e) => {
-    e.target.style.background = "#1f2937";
-  }}
-  onMouseOut={(e) => {
-    e.target.style.background = "#111";
-  }}
->
-  📔 Diary
-</Link>
+        {NAV_LINKS.map(({ to, label }) => (
+          <Link
+            key={to}
+            to={to}
+            className={`am-nav-link ${location.pathname === to ? "active" : ""}`}
+            style={link}
+          >
+            {label}
+          </Link>
+        ))}
       </div>
 
       {/* RIGHT */}
       <div style={right}>
-
-        {/* SWITCH COURT BUTTON */}
-        <button
-          onClick={() => navigate("/courtselector")}
-          style={switchBtn}
-        >
+        <Button variant="secondary" onClick={() => navigate("/court-selector")} style={switchBtnStyle}>
           Switch Court
-        </button>
-
-        {/* LOGOUT */}
-        <button onClick={logout} style={btn}>
+        </Button>
+        <Button variant="danger" onClick={logout}>
           Logout
-        </button>
-
+        </Button>
       </div>
-
     </div>
   );
 }
 
-/* =========================
-   STYLES (UNCHANGED THEME)
-========================= */
+/* ================= STYLES ================= */
 
 const nav = {
   position: "sticky",
@@ -80,76 +69,63 @@ const nav = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  padding: "12px 20px",
-  background: "#111",
-  color: "white"
+  padding: "14px 28px",
+  background: colors.ink,
+  color: colors.white,
+  fontFamily: font.body,
+  flexWrap: "wrap",
+  gap: "12px",
+  borderBottom: `1px solid #000`,
 };
 
 const left = {
   display: "flex",
   alignItems: "center",
-  gap: "10px"
+  gap: "12px",
+};
+
+const brand = {
+  margin: 0,
+  fontFamily: font.display,
+  fontSize: "18px",
+  letterSpacing: "0.03em",
+  color: colors.white,
 };
 
 const center = {
   display: "flex",
-  gap: "15px"
+  gap: "6px",
+  flexWrap: "wrap",
 };
 
 const right = {
   display: "flex",
-  gap: "10px"
+  gap: "10px",
 };
 
 const link = {
-  color: "white",
+  color: "#D6D7DA",
   textDecoration: "none",
-  padding: "8px 12px",
-  borderRadius: "6px",
-  background: "#222"
-};
-
-const diaryBtn = {
-  color: "white",
-  textDecoration: "none",
-  padding: "8px 12px",
-  borderRadius: "6px",
-  background: "#222",
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "6px",
-  cursor: "pointer"
-};;
-
-const diaryBtnHover = {
-  ...diaryBtn,
-  background: "#1f2937",
-};
-
-const switchBtn = {
   padding: "8px 14px",
-  background: "#222",
-  color: "white",
-  border: "none",
   borderRadius: "6px",
-  cursor: "pointer"
+  fontSize: "13px",
+  fontWeight: 600,
 };
 
-const btn = {
-  padding: "8px 14px",
-  background: "red",
-  color: "white",
-  border: "none",
-  borderRadius: "6px",
-  cursor: "pointer"
+const switchBtnStyle = {
+  background: "transparent",
+  color: colors.white,
+  borderColor: "#4A4A4E",
 };
 
 const courtTag = {
-  fontSize: "12px",
-  padding: "4px 8px",
-  background: "#333",
+  fontSize: "11px",
+  fontWeight: 700,
+  letterSpacing: "0.05em",
+  padding: "5px 10px",
+  background: colors.accent,
   borderRadius: "6px",
-  color: "#aaa"
+  color: colors.white,
 };
 
 export default Navbar;

@@ -1,6 +1,8 @@
+// frontend/src/pages/IntroPage.js
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "../assets/logo.png";
+import { colors, font } from "../styles/theme";
 
 function IntroPage() {
   const navigate = useNavigate();
@@ -15,22 +17,16 @@ function IntroPage() {
 
   return (
     <div style={container}>
-
-      {/* LOGO CARD */}
       <div style={logoBox}>
         <img src={logo} alt="Advomind Logo" style={logoStyle} />
       </div>
 
-      {/* TITLE */}
       <h1 style={title}>ADVOMIND</h1>
-
       <p style={subtitle}>Smart Legal Case Management System</p>
-
+      <div style={rule} />
     </div>
   );
 }
-
-/* ================= THEME: CLEAN LAW DASHBOARD ================= */
 
 const container = {
   height: "100vh",
@@ -38,38 +34,49 @@ const container = {
   flexDirection: "column",
   justifyContent: "center",
   alignItems: "center",
-  background: "#e5e7eb",   // ✅ balanced soft grey
-  color: "#111"
+  background: colors.ink,
+  color: colors.white,
+  fontFamily: font.body,
 };
 
 const logoBox = {
-  background: "transparent",
-  padding: "0",
-  marginBottom: "20px",
+  marginBottom: "24px",
   display: "flex",
   justifyContent: "center",
-  alignItems: "center"
+  alignItems: "center",
+  width: "96px",
+  height: "96px",
+  borderRadius: "50%",
+  background: colors.white,
 };
 
 const logoStyle = {
-  width: "110px",
-  height: "110px",
+  width: "62px",
+  height: "62px",
   objectFit: "contain",
-  background: "transparent",
-  mixBlendMode: "multiply"
 };
 
 const title = {
-  fontSize: "44px",
-  fontWeight: "700",
-  letterSpacing: "2px",
-  color: "#111"
+  fontFamily: font.display,
+  fontSize: "40px",
+  fontWeight: 600,
+  letterSpacing: "0.08em",
+  color: colors.white,
+  margin: 0,
 };
 
 const subtitle = {
-  marginTop: "8px",
-  color: "#6b7280",
-  fontSize: "14px"
+  marginTop: "10px",
+  color: "#B7B8BC",
+  fontSize: "14px",
+  letterSpacing: "0.02em",
+};
+
+const rule = {
+  marginTop: "28px",
+  width: "40px",
+  height: "2px",
+  background: colors.accent,
 };
 
 export default IntroPage;

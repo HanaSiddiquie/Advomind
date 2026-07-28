@@ -1,3 +1,4 @@
+// frontend/src/pages/Auth.js
 import { useState } from "react";
 import {
   signInWithEmailAndPassword,
@@ -5,10 +6,14 @@ import {
   sendPasswordResetEmail
 } from "firebase/auth";
 import { auth } from "../firebase";
+import { colors, font, radius, shadow } from "../styles/theme";
+import Input from "../components/ui/Input";
+import Button from "../components/ui/Button";
 
 function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [showPass, setShowPass] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const [form, setForm] = useState({
     email: "",
@@ -20,18 +25,24 @@ function Auth() {
   };
 
   const handleLogin = async () => {
+    setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, form.email, form.password);
     } catch (err) {
       alert(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleSignup = async () => {
+    setLoading(true);
     try {
       await createUserWithEmailAndPassword(auth, form.email, form.password);
     } catch (err) {
       alert(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -51,10 +62,9 @@ function Auth() {
 
   return (
     <div style={container}>
-
       <div style={card}>
-
-        <h2 style={title}>⚖️ ADVOMIND</h2>
+        <h2 style={title}>⚖ ADVOMIND</h2>
+        <p style={tagline}>Legal Case Management</p>
 
         {/* TAB */}
         <div style={tabRow}>
@@ -73,88 +83,87 @@ function Auth() {
           </button>
         </div>
 
-        {/* EMAIL */}
-        <input
-          style={input}
+        <Input
           name="email"
-          placeholder="Email"
+          placeholder="you@lawfirm.com"
+          label="Email"
           value={form.email}
           onChange={handleChange}
         />
 
-        {/* PASSWORD */}
         <div style={passwordWrapper}>
-          <input
-            style={input}
+          <Input
             name="password"
             type={showPass ? "text" : "password"}
-            placeholder="Password"
+            placeholder="••••••••"
+            label="Password"
             value={form.password}
             onChange={handleChange}
           />
 
-          <button
-            type="button"
-            onClick={() => setShowPass(!showPass)}
-            style={eyeBtn}
-          >
+          <button type="button" onClick={() => setShowPass(!showPass)} style={eyeBtn}>
             {showPass ? "Hide" : "Show"}
           </button>
         </div>
 
-        {/* BUTTON */}
-        <button
-          style={btn}
-          onClick={isLogin ? handleLogin : handleSignup}
-        >
-          {isLogin ? "Login" : "Create Account"}
-        </button>
+        <Button full onClick={isLogin ? handleLogin : handleSignup} disabled={loading} style={{ marginTop: "6px" }}>
+          {loading ? "Please wait…" : isLogin ? "Login" : "Create Account"}
+        </Button>
 
-        {/* FORGOT PASSWORD */}
         {isLogin && (
           <p style={forgot} onClick={handleForgotPassword}>
             Forgot password?
           </p>
         )}
-
       </div>
     </div>
   );
 }
 
-/* ================= THEME ================= */
+/* ================= STYLES ================= */
 
 const container = {
   height: "100vh",
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
-  background: "#e5e7eb"
+  background: colors.paper,
+  fontFamily: font.body,
 };
 
 const card = {
-  width: "360px",
-  padding: "28px",
-  background: "#fff",
-  borderRadius: "14px",
+  width: "380px",
+  padding: "34px 32px",
+  background: colors.surface,
+  borderRadius: radius.lg,
   textAlign: "center",
-  border: "1px solid #e5e7eb",
-  boxShadow: "0 10px 25px rgba(0,0,0,0.08)"
+  border: `1px solid ${colors.hairline}`,
+  boxShadow: shadow.lg,
 };
 
 const title = {
-  marginBottom: "15px",
-  fontSize: "22px",
-  fontWeight: "700",
-  color: "#111827"
+  margin: 0,
+  fontFamily: font.display,
+  fontSize: "24px",
+  fontWeight: 600,
+  color: colors.ink,
+};
+
+const tagline = {
+  margin: "4px 0 22px",
+  fontSize: "12px",
+  color: colors.slate,
+  letterSpacing: "0.04em",
+  textTransform: "uppercase",
 };
 
 const tabRow = {
   display: "flex",
-  marginBottom: "15px",
-  background: "#f3f4f6",
-  borderRadius: "8px",
-  overflow: "hidden"
+  marginBottom: "20px",
+  background: colors.paper,
+  borderRadius: radius.sm,
+  border: `1px solid ${colors.hairline}`,
+  overflow: "hidden",
 };
 
 const tabBtn = {
@@ -163,62 +172,43 @@ const tabBtn = {
   border: "none",
   background: "transparent",
   cursor: "pointer",
-  color: "#374151",
-  fontWeight: "500"
+  color: colors.slate,
+  fontWeight: 600,
+  fontFamily: font.body,
+  fontSize: "13px",
 };
 
 const activeTab = {
   ...tabBtn,
-  background: "#111827",
-  color: "white"
+  background: colors.ink,
+  color: colors.white,
 };
 
-const input = {
-  width: "100%",
-  padding: "11px",
-  marginBottom: "10px",
-  border: "1px solid #d1d5db",
-  borderRadius: "8px",
-  outline: "none",
-  background: "#f9fafb"
-};
-
-const btn = {
-  width: "100%",
-  padding: "11px",
-  background: "#111827",
-  color: "white",
-  border: "none",
-  borderRadius: "8px",
-  cursor: "pointer",
-  fontWeight: "600"
-};
-
-/* password wrapper */
 const passwordWrapper = {
   position: "relative",
-  width: "100%"
+  width: "100%",
 };
 
-/* clean show/hide button */
 const eyeBtn = {
   position: "absolute",
   right: "10px",
-  top: "50%",
-  transform: "translateY(-50%)",
+  top: "34px",
   background: "none",
   border: "none",
-  fontSize: "12px",
-  fontWeight: "600",
-  color: "#4f46e5",
-  cursor: "pointer"
+  fontSize: "11px",
+  fontWeight: 700,
+  letterSpacing: "0.04em",
+  textTransform: "uppercase",
+  color: colors.accent,
+  cursor: "pointer",
 };
 
 const forgot = {
-  marginTop: "10px",
+  marginTop: "14px",
   fontSize: "13px",
-  color: "#4f46e5",
-  cursor: "pointer"
+  color: colors.accent,
+  cursor: "pointer",
+  fontWeight: 500,
 };
 
 export default Auth;

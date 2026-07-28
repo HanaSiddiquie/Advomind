@@ -1,3 +1,4 @@
+// frontend/src/App.js
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
@@ -116,10 +117,11 @@ export default function App() {
         <Route path="/hearings/:id" element={<Protected user={user}><HearingDetails /></Protected>} />
 
         <Route path="/hearings-dashboard" element={<Protected user={user}><HearingsDashboard /></Protected>} />
-        <Route path="/archive" element={<ArchivePage />} />
-        {/* FALLBACK */}
+        <Route path="/archive" element={<Protected user={user}><ArchivePage /></Protected>} />
+        <Route path="/diary" element={<Protected user={user}><Diary /></Protected>} />
+
+        {/* FALLBACK — must stay last, React Router matches routes in order */}
         <Route path="*" element={<Navigate to="/" />} />
-        <Route path="/diary" element={<Diary />} />
 
       </Routes>
     </BrowserRouter>
