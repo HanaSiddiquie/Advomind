@@ -45,13 +45,13 @@ function Dashboard() {
     try {
       if (!court || !userId) return;
 
-      const clientsSnap = await getDocs(
-        collection(db, "users", userId, "clients")
+      const clientsQ = query(
+        collection(db, "users", userId, "clients"),
+        where("court_type", "==", court)
       );
 
-      const clientsCount = clientsSnap.docs.filter(
-        d => d.data().court_type === court
-      ).length;
+      const clientsSnap = await getDocs(clientsQ);
+      const clientsCount = clientsSnap.size;
 
       const casesQ = query(
         collection(db, "cases"),
