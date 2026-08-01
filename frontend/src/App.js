@@ -1,9 +1,9 @@
 // frontend/src/App.js
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
+import { signOut } from "firebase/auth";
 import { auth } from "./firebase";
 
+import { AuthRoleProvider, useAuthRole } from "./context/AuthRoleContext";
 import Navbar from "./components/Navbar";
 
 import IntroPage from "./pages/IntroPage";
@@ -24,15 +24,51 @@ import HearingDetails from "./pages/HearingDetails";
 import HearingsDashboard from "./pages/HearingsDashboard";
 import ArchivePage from "./pages/ArchivePage";
 import Diary from "./pages/Diary";
+import ManageSecretaries from "./pages/ManageSecretaries";
+
+// Shown instead of redirecting when we can't resolve a role — redirecting
+// here would just bounce back and forth with the Auth page forever.
+function NoProfileScreen() {
+  return (
+    <div style={{ padding: 40, fontFamily: "sans-serif" }}>
+      <h2>We couldn't find a profile for this account</h2>
+      <p style={{ color: "#6B6F76", maxWidth: 480 }}>
+        This can happen with accounts created before role support was added,
+        or if a secretary invite didn't finish setting up correctly. Log out
+        and sign up again, or contact support if this persists.
+      </p>
+      <button
+        onClick={() => signOut(auth)}
+        style={{ marginTop: 16, padding: "10px 18px", cursor: "pointer" }}
+      >
+        Log out
+      </button>
+    </div>
+  );
+}
 
 // =====================
 // PROTECTED ROUTE
+// Requires: signed in, a resolved role/profile, and (unless the route says
+// otherwise) a court already chosen.
 // =====================
-function Protected({ user, children }) {
+function Protected({ children, requireCourt = true, lawyerOnly = false }) {
+  const { user, role, isDisabled, loading } = useAuthRole();
   const court = localStorage.getItem("court");
 
+  if (loading) return <p>Loading...</p>;
   if (!user) return <Navigate to="/auth" replace />;
-  if (!court) return <Navigate to="/court-selector" replace />;
+
+  if (isDisabled) {
+    return <p style={{ padding: 40 }}>Your account has been disabled by your lawyer. Contact them for access.</p>;
+  }
+
+  // Signed in but no resolved role — show a static screen, NEVER navigate
+  // here, or this ping-pongs with PublicRoute below.
+  if (!role) return <NoProfileScreen />;
+
+  if (lawyerOnly && role !== "lawyer") return <Navigate to="/dashboard" replace />;
+  if (requireCourt && !court) return <Navigate to="/court-selector" replace />;
 
   return (
     <>
@@ -44,86 +80,96 @@ function Protected({ user, children }) {
 
 // =====================
 // PUBLIC ROUTE
+// Only bounce away from /auth once we've confirmed BOTH a user AND a
+// resolved role — otherwise a profile-less account would loop right back
+// here via Protected's NoProfileScreen... except that no longer navigates,
+// so this guard is now just for a clean, non-flickering experience.
 // =====================
-function PublicRoute({ user, children }) {
-  if (user) return <Navigate to="/court-selector" replace />;
+function PublicRoute({ children }) {
+  const { user, role, loading } = useAuthRole();
+  if (loading) return <p>Loading...</p>;
+  if (user && role) return <Navigate to="/court-selector" replace />;
+  if (user && !role) return <NoProfileScreen />;
   return children;
 }
 
 // =====================
 // APP
 // =====================
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setLoading(false);
-    });
-
-    return () => unsub();
-  }, []);
+function AppRoutes() {
+  const { user, role, loading } = useAuthRole();
 
   if (loading) return <p>Loading...</p>;
 
   return (
+    <Routes>
+
+      {/* INTRO PAGE */}
+      <Route path="/" element={<IntroPage />} />
+
+      <Route
+        path="/home"
+        element={
+          user && role
+            ? <Navigate to="/court-selector" replace />
+            : <Navigate to="/auth" replace />
+        }
+      />
+
+      {/* AUTH */}
+      <Route
+        path="/auth"
+        element={
+          <PublicRoute>
+            <Auth />
+          </PublicRoute>
+        }
+      />
+
+      {/* COURT SELECTION */}
+      <Route
+        path="/court-selector"
+        element={
+          <Protected requireCourt={false}>
+            <CourtSelector />
+          </Protected>
+        }
+      />
+
+      {/* PROTECTED ROUTES */}
+      <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
+      <Route path="/clients" element={<Protected><Clients /></Protected>} />
+      <Route path="/clients/:id" element={<Protected><ClientDetails /></Protected>} />
+
+      <Route path="/cases" element={<Protected><Cases /></Protected>} />
+      <Route path="/cases/:id" element={<Protected><CaseDetails /></Protected>} />
+
+      <Route path="/hearings" element={<Protected><Hearings /></Protected>} />
+      <Route path="/hearings/:id" element={<Protected><HearingDetails /></Protected>} />
+
+      <Route path="/hearings-dashboard" element={<Protected><HearingsDashboard /></Protected>} />
+      <Route path="/archive" element={<Protected><ArchivePage /></Protected>} />
+      <Route path="/diary" element={<Protected><Diary /></Protected>} />
+
+      {/* LAWYER-ONLY */}
+      <Route
+        path="/secretaries"
+        element={<Protected lawyerOnly><ManageSecretaries /></Protected>}
+      />
+
+      {/* FALLBACK — must stay last, React Router matches routes in order */}
+      <Route path="*" element={<Navigate to="/" />} />
+
+    </Routes>
+  );
+}
+
+export default function App() {
+  return (
     <BrowserRouter>
-      <Routes>
-
-        {/* ✅ INTRO PAGE */}
-        <Route path="/" element={<IntroPage />} />
-
-        {/* ✅ AFTER INTRO → DECIDE BASED ON USER */}
-        <Route
-          path="/home"
-          element={
-            user
-              ? <Navigate to="/court-selector" replace />
-              : <Navigate to="/auth" replace />
-          }
-        />
-
-        {/* AUTH */}
-        <Route
-          path="/auth"
-          element={
-            <PublicRoute user={user}>
-              <Auth />
-            </PublicRoute>
-          }
-        />
-
-        {/* COURT SELECTION */}
-        <Route
-          path="/court-selector"
-          element={
-            user
-              ? <CourtSelector />
-              : <Navigate to="/auth" replace />
-          }
-        />
-
-        {/* PROTECTED ROUTES */}
-        <Route path="/dashboard" element={<Protected user={user}><Dashboard /></Protected>} />
-        <Route path="/clients" element={<Protected user={user}><Clients /></Protected>} />
-        <Route path="/clients/:id" element={<Protected user={user}><ClientDetails /></Protected>} />
-
-        <Route path="/cases" element={<Protected user={user}><Cases /></Protected>} />
-        <Route path="/cases/:id" element={<Protected user={user}><CaseDetails /></Protected>} />
-
-        <Route path="/hearings" element={<Protected user={user}><Hearings /></Protected>} />
-        <Route path="/hearings/:id" element={<Protected user={user}><HearingDetails /></Protected>} />
-
-        <Route path="/hearings-dashboard" element={<Protected user={user}><HearingsDashboard /></Protected>} />
-        <Route path="/archive" element={<Protected user={user}><ArchivePage /></Protected>} />
-        <Route path="/diary" element={<Protected user={user}><Diary /></Protected>} />
-
-        {/* FALLBACK — must stay last, React Router matches routes in order */}
-        <Route path="*" element={<Navigate to="/" />} />
-
-      </Routes>
+      <AuthRoleProvider>
+        <AppRoutes />
+      </AuthRoleProvider>
     </BrowserRouter>
   );
 }

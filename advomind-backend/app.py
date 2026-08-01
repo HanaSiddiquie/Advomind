@@ -1,3 +1,4 @@
+# advomind-backend/app.py  (top of file only — everything below stays the same)
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
@@ -5,8 +6,11 @@ from werkzeug.utils import secure_filename
 import time
 import uuid  # ✅ NEW
 
+from admin_routes import admin_bp
+
 app = Flask(__name__)
 CORS(app)
+app.register_blueprint(admin_bp)
 
 # =========================
 # FILE STORAGE

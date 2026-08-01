@@ -1,6 +1,6 @@
 // frontend/src/pages/Dashboard.js
 import { useEffect, useState } from "react";
-import { db, auth } from "../firebase";
+import { db } from "../firebase";
 import {
   collection,
   getDocs,
@@ -9,26 +9,17 @@ import {
 } from "firebase/firestore";
 import { colors, font, radius, shadow } from "../styles/theme";
 import PageContainer from "../components/ui/PageContainer";
+import { useAuthRole } from "../context/AuthRoleContext";
 
 function Dashboard() {
   const court = localStorage.getItem("court");
-
-  const [userId, setUserId] = useState(null);
+  const { ownerId: userId } = useAuthRole();
 
   const [stats, setStats] = useState({
     clients: 0,
     cases: 0,
     hearings: 0
   });
-
-  // ================= AUTH =================
-  useEffect(() => {
-    const unsub = auth.onAuthStateChanged(user => {
-      setUserId(user?.uid || null);
-    });
-
-    return () => unsub();
-  }, []);
 
   // ================= HEARINGS COUNT =================
   const getHearingsCount = async (caseIds) => {

@@ -1,26 +1,19 @@
 // frontend/src/pages/ArchivePage.js
 import { useEffect, useState } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
-import { db, auth } from "../firebase";
+import { db } from "../firebase";
 import { useNavigate } from "react-router-dom";
 import { colors, font } from "../styles/theme";
 import PageContainer from "../components/ui/PageContainer";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
+import { useAuthRole } from "../context/AuthRoleContext";
 
 function ArchivePage() {
-  const [userId, setUserId] = useState(null);
+  const { ownerId: userId } = useAuthRole();
   const [cases, setCases] = useState([]);
   const navigate = useNavigate();
-
-  // AUTH
-  useEffect(() => {
-    const unsub = auth.onAuthStateChanged(user => {
-      setUserId(user?.uid || null);
-    });
-    return () => unsub();
-  }, []);
 
   // FETCH ARCHIVED CASES
   const fetchArchivedCases = async (uid) => {

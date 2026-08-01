@@ -1,8 +1,9 @@
 // frontend/src/pages/CourtSelector.js
 import { useNavigate } from "react-router-dom";
 import { colors, font, radius, shadow } from "../styles/theme";
+import { useAuthRole } from "../context/AuthRoleContext";
 
-const COURTS = [
+const ALL_COURTS = [
   { key: "civil", label: "Civil Court", desc: "Contracts, property, and civil disputes" },
   { key: "session", label: "Session Court", desc: "Criminal trials and sessions matters" },
   { key: "high", label: "High Court", desc: "Appeals and constitutional matters" },
@@ -10,6 +11,11 @@ const COURTS = [
 
 function CourtSelector() {
   const navigate = useNavigate();
+  const { isLawyer, assignedCourts } = useAuthRole();
+
+  const COURTS = isLawyer
+    ? ALL_COURTS
+    : ALL_COURTS.filter(c => (assignedCourts || []).includes(c.key));
 
   const selectCourt = (court) => {
     localStorage.setItem("court", court);
@@ -21,7 +27,17 @@ function CourtSelector() {
       <div style={box}>
         <div style={eyebrow}>Before you continue</div>
         <h1 style={title}>Select Court</h1>
-        <p style={subtitle}>Choose which court's caseload you'd like to work in.</p>
+        <p style={subtitle}>
+          {isLawyer
+            ? "Choose which court's caseload you'd like to work in."
+            : "Choose which of your assigned courts to work in."}
+        </p>
+
+        {COURTS.length === 0 && (
+          <p style={{ color: colors.slate, fontSize: 13 }}>
+            You haven't been assigned to any court yet. Contact your lawyer.
+          </p>
+        )}
 
         <div style={cardContainer}>
           {COURTS.map((c) => (

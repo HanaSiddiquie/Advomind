@@ -1,0 +1,20 @@
+# Secrets — never commit
+advomind-backend/secrets/
+*.json.key
+serviceAccountKey.json
+
+# Node
+frontend/node_modules/
+frontend/build/
+
+# Python
+advomind-backend/__pycache__/
+advomind-backend/venv/
+advomind-backend/*.pyc
+
+# Uploads (local dev artifacts)
+advomind-backend/uploads/
+
+# OS
+.DS_Store
+Thumbs.db

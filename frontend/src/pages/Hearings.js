@@ -1,7 +1,7 @@
 // frontend/src/pages/Hearings.js
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { db, auth } from "../firebase";
+import { db } from "../firebase";
 import {
   collection,
   getDocs,
@@ -15,13 +15,14 @@ import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
+import { useAuthRole } from "../context/AuthRoleContext";
 
 function Hearings() {
   const [hearings, setHearings] = useState([]);
   const [cases, setCases] = useState([]);
   const [clients, setClients] = useState([]);
 
-  const [userId, setUserId] = useState(null);
+  const { ownerId: userId, user } = useAuthRole();
   const courtType = localStorage.getItem("court");
 
   const navigate = useNavigate();
@@ -32,15 +33,6 @@ function Hearings() {
     event: "",
     notes: ""
   });
-
-  // ================= AUTH =================
-  useEffect(() => {
-    const unsub = auth.onAuthStateChanged(user => {
-      setUserId(user?.uid || null);
-    });
-
-    return () => unsub();
-  }, []);
 
   // ================= FETCH =================
   const fetchData = async () => {
@@ -114,7 +106,8 @@ function Hearings() {
       event: form.event,
       notes: form.notes,
       court_type: courtType,
-      userId
+      userId,
+      createdBy: user.uid
     });
 
     setForm({ case_id: "", date: "", event: "", notes: "" });

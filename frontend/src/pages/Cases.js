@@ -1,7 +1,7 @@
 // frontend/src/pages/Cases.js
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { db, auth } from "../firebase";
+import { db } from "../firebase";
 import {
   collection,
   getDocs,
@@ -17,12 +17,13 @@ import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
+import { useAuthRole } from "../context/AuthRoleContext";
 
 function Cases() {
   const [cases, setCases] = useState({ active: [], archived: [] });
   const [clients, setClients] = useState([]);
 
-  const [userId, setUserId] = useState(null);
+  const { ownerId: userId, user, isLawyer } = useAuthRole();
   const court = localStorage.getItem("court");
 
   const navigate = useNavigate();
@@ -32,14 +33,6 @@ function Cases() {
     title: "",
     description: ""
   });
-
-  // ================= AUTH =================
-  useEffect(() => {
-    const unsub = auth.onAuthStateChanged(user => {
-      setUserId(user?.uid || null);
-    });
-    return () => unsub();
-  }, []);
 
   // ================= FETCH =================
   const fetchData = async () => {
@@ -98,7 +91,8 @@ function Cases() {
       userId,
       court_type: court,
       status: "Open",
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      createdBy: user.uid
     });
 
     setForm({ client_id: "", title: "", description: "" });
@@ -212,14 +206,16 @@ function Cases() {
                 <Badge tone="accent">{c.status}</Badge>
               </div>
 
-              <div style={cardActions}>
-                <Button variant="secondary" onClick={() => archiveCase(c)} style={{ flex: 1 }}>
-                  Archive
-                </Button>
-                <Button variant="danger" onClick={() => handleDelete(c.id)} style={{ flex: 1 }}>
-                  Delete
-                </Button>
-              </div>
+              {isLawyer && (
+                <div style={cardActions}>
+                  <Button variant="secondary" onClick={() => archiveCase(c)} style={{ flex: 1 }}>
+                    Archive
+                  </Button>
+                  <Button variant="danger" onClick={() => handleDelete(c.id)} style={{ flex: 1 }}>
+                    Delete
+                  </Button>
+                </div>
+              )}
             </Card>
           ))
         )}
@@ -237,14 +233,16 @@ function Cases() {
               <h3 style={caseTitle}>{c.title}</h3>
               <Badge tone="neutral">Archived</Badge>
 
-              <Button
-                variant="dark"
-                onClick={() => restoreCase(c)}
-                full
-                style={{ marginTop: 14 }}
-              >
-                Restore
-              </Button>
+              {isLawyer && (
+                <Button
+                  variant="dark"
+                  onClick={() => restoreCase(c)}
+                  full
+                  style={{ marginTop: 14 }}
+                >
+                  Restore
+                </Button>
+              )}
             </Card>
           ))
         )}

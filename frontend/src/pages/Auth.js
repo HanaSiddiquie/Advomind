@@ -5,7 +5,8 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail
 } from "firebase/auth";
-import { auth } from "../firebase";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { auth, db } from "../firebase";
 import { colors, font, radius, shadow } from "../styles/theme";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
@@ -35,10 +36,18 @@ function Auth() {
     }
   };
 
+  // Self-registration is always as a lawyer — secretary accounts can only
+  // be created by a lawyer via the backend (see Manage Secretaries page).
   const handleSignup = async () => {
     setLoading(true);
     try {
-      await createUserWithEmailAndPassword(auth, form.email, form.password);
+      const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
+
+      await setDoc(doc(db, "users", cred.user.uid), {
+        role: "lawyer",
+        email: form.email,
+        createdAt: serverTimestamp()
+      });
     } catch (err) {
       alert(err.message);
     } finally {

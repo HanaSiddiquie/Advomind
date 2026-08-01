@@ -4,8 +4,9 @@ import { signOut } from "firebase/auth";
 import { auth } from "../firebase";
 import { colors, font } from "../styles/theme";
 import Button from "./ui/Button";
+import { useAuthRole } from "../context/AuthRoleContext";
 
-const NAV_LINKS = [
+const BASE_LINKS = [
   { to: "/dashboard", label: "Dashboard" },
   { to: "/clients", label: "Clients" },
   { to: "/cases", label: "Cases" },
@@ -18,6 +19,11 @@ function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const court = localStorage.getItem("court");
+  const { isLawyer } = useAuthRole();
+
+  const NAV_LINKS = isLawyer
+    ? [...BASE_LINKS, { to: "/secretaries", label: "Secretaries" }]
+    : BASE_LINKS;
 
   const logout = async () => {
     await signOut(auth);
@@ -31,6 +37,7 @@ function Navbar() {
       <div style={left}>
         <h2 style={brand}>⚖ ADVOMIND</h2>
         {court && <span style={courtTag}>{court.toUpperCase()} COURT</span>}
+        <span style={roleTag}>{isLawyer ? "Lawyer" : "Secretary"}</span>
       </div>
 
       {/* CENTER LINKS */}
@@ -126,6 +133,17 @@ const courtTag = {
   background: colors.accent,
   borderRadius: "6px",
   color: colors.white,
+};
+
+const roleTag = {
+  fontSize: "11px",
+  fontWeight: 700,
+  letterSpacing: "0.05em",
+  padding: "5px 10px",
+  background: "transparent",
+  border: "1px solid #4A4A4E",
+  borderRadius: "6px",
+  color: "#D6D7DA",
 };
 
 export default Navbar;

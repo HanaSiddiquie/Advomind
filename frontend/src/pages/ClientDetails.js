@@ -1,7 +1,7 @@
 // frontend/src/pages/ClientDetails.js
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { db, auth } from "../firebase";
+import { db } from "../firebase";
 import {
   doc,
   updateDoc,
@@ -18,6 +18,7 @@ import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
+import { useAuthRole } from "../context/AuthRoleContext";
 
 function ClientDetails() {
   const { id } = useParams();
@@ -28,7 +29,7 @@ function ClientDetails() {
   const [hearings, setHearings] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [userId, setUserId] = useState(null);
+  const { ownerId: userId, user } = useAuthRole();
   const court = localStorage.getItem("court");
 
   const [form, setForm] = useState({
@@ -43,14 +44,6 @@ function ClientDetails() {
     title: "",
     description: ""
   });
-
-  /* ================= AUTH ================= */
-  useEffect(() => {
-    const unsub = auth.onAuthStateChanged(user => {
-      setUserId(user?.uid || null);
-    });
-    return () => unsub();
-  }, []);
 
   /* ================= CLIENT ================= */
   const fetchClient = async (uid) => {
@@ -143,7 +136,8 @@ function ClientDetails() {
       description: caseForm.description,
       status: "Open",
       court_type: court,
-      userId
+      userId,
+      createdBy: user.uid
     });
 
     setCaseForm({ title: "", description: "" });

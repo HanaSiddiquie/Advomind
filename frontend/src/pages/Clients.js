@@ -1,7 +1,7 @@
 // frontend/src/pages/Clients.js
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { db, auth } from "../firebase";
+import { db } from "../firebase";
 import {
   collection,
   getDocs,
@@ -16,11 +16,12 @@ import PageContainer from "../components/ui/PageContainer";
 import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
+import { useAuthRole } from "../context/AuthRoleContext";
 
 function Clients() {
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState("");
-  const [userId, setUserId] = useState(null);
+  const { ownerId: userId, user, isLawyer } = useAuthRole();
 
   const navigate = useNavigate();
   const court = localStorage.getItem("court");
@@ -30,15 +31,6 @@ function Clients() {
     cnic: "",
     phone: ""
   });
-
-  // ================= AUTH =================
-  useEffect(() => {
-    const unsub = auth.onAuthStateChanged(user => {
-      setUserId(user?.uid || null);
-    });
-
-    return () => unsub();
-  }, []);
 
   // ================= FETCH =================
   const fetchClients = async () => {
@@ -66,7 +58,8 @@ function Clients() {
       collection(db, "users", userId, "clients"),
       {
         ...form,
-        court_type: court
+        court_type: court,
+        createdBy: user.uid
       }
     );
 
@@ -150,14 +143,16 @@ function Clients() {
                 {c.phone && <p style={meta}>{c.phone}</p>}
               </div>
 
-              <Button
-                variant="danger"
-                onClick={() => handleDelete(c.id)}
-                full
-                style={{ marginTop: 14 }}
-              >
-                Delete
-              </Button>
+              {isLawyer && (
+                <Button
+                  variant="danger"
+                  onClick={() => handleDelete(c.id)}
+                  full
+                  style={{ marginTop: 14 }}
+                >
+                  Delete
+                </Button>
+              )}
             </Card>
           ))
         )}

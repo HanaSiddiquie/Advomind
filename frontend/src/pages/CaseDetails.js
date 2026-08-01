@@ -26,6 +26,7 @@ import PageContainer from "../components/ui/PageContainer";
 import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
+import { useAuthRole } from "../context/AuthRoleContext";
 
 const TABS = ["view", "details", "diary", "hearings", "files"];
 
@@ -33,7 +34,7 @@ function CaseDetails() {
   const { id } = useParams();
   const caseId = id;
 
-  const [userId, setUserId] = useState(null);
+  const { ownerId: userId, user: currentUser, isLawyer } = useAuthRole();
   const courtType = localStorage.getItem("court");
 
   const [caseData, setCaseData] = useState(null);
@@ -58,14 +59,6 @@ function CaseDetails() {
     event: "",
     notes: ""
   });
-
-  /* ================= AUTH ================= */
-  useEffect(() => {
-    const unsub = auth.onAuthStateChanged(user => {
-      setUserId(user?.uid || null);
-    });
-    return () => unsub();
-  }, []);
 
   /* ================= CASE ================= */
   const fetchCase = async (uid) => {
@@ -126,6 +119,11 @@ function CaseDetails() {
 
   /* ================= UPDATE CASE (ARCHIVE ON CLOSE) ================= */
   const updateCase = async () => {
+    if (form.status === "Closed" && !isLawyer) {
+      alert("Only a lawyer can close and archive a case.");
+      return;
+    }
+
     try {
       const caseRef = doc(db, "cases", caseId);
 
@@ -162,6 +160,7 @@ function CaseDetails() {
       case_id: caseId,
       userId,
       court_type: courtType,
+      createdBy: currentUser.uid,
       ...hearingForm
     });
 
@@ -177,10 +176,8 @@ function CaseDetails() {
 
       setUploading(true);
 
-      const uid = user.uid;
-
       const cleanName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
-      const path = `cases/${uid}/${caseId}/${Date.now()}_${cleanName}`;
+      const path = `cases/${userId}/${caseId}/${Date.now()}_${cleanName}`;
 
       const fileRef = ref(storage, path);
 
@@ -189,7 +186,8 @@ function CaseDetails() {
 
       await addDoc(collection(db, "files"), {
         case_id: caseId,
-        userId: uid,
+        userId,
+        createdBy: currentUser.uid,
         name: file.name,
         storagePath: path,
         url,
@@ -197,7 +195,7 @@ function CaseDetails() {
       });
 
       setFile(null);
-      await fetchFiles(uid);
+      await fetchFiles(userId);
 
     } catch (err) {
       console.error(err);
@@ -207,19 +205,16 @@ function CaseDetails() {
     }
   };
 
-  /* ================= DELETE FILE ================= */
+  /* ================= DELETE FILE (lawyer only — matches Firestore rules) ================= */
   const deleteFile = async (f) => {
     try {
-      const user = auth.currentUser;
-      if (!user) return;
-
       if (f.storagePath) {
         await deleteObject(ref(storage, f.storagePath));
       }
 
       await deleteDoc(doc(db, "files", f.id));
 
-      fetchFiles(user.uid);
+      fetchFiles(userId);
 
     } catch (err) {
       console.error(err);
@@ -270,7 +265,7 @@ function CaseDetails() {
               <option>Open</option>
               <option>In Progress</option>
               <option>On Hold</option>
-              <option>Closed</option>
+              {isLawyer && <option>Closed</option>}
             </select>
 
             <Button onClick={updateCase} style={{ alignSelf: "flex-start" }}>
@@ -363,7 +358,7 @@ function CaseDetails() {
                 <a href={f.url} target="_blank" rel="noreferrer" style={fileLink}>
                   {f.name}
                 </a>
-                <Button variant="danger" onClick={() => deleteFile(f)}>Delete</Button>
+                {isLawyer && <Button variant="danger" onClick={() => deleteFile(f)}>Delete</Button>}
               </div>
             ))}
           </div>

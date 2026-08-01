@@ -1,20 +1,21 @@
 // frontend/src/pages/HearingDetails.js
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { db, auth } from "../firebase";
+import { db } from "../firebase";
 import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { colors, font } from "../styles/theme";
 import PageContainer from "../components/ui/PageContainer";
 import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
+import { useAuthRole } from "../context/AuthRoleContext";
 
 function HearingDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const [hearing, setHearing] = useState(null);
-  const [userId, setUserId] = useState(null);
+  const { ownerId: userId, isLawyer } = useAuthRole();
   const courtType = localStorage.getItem("court");
 
   const [form, setForm] = useState({
@@ -23,15 +24,6 @@ function HearingDetails() {
     notes: "",
     reminder: ""
   });
-
-  // ================= AUTH =================
-  useEffect(() => {
-    const unsub = auth.onAuthStateChanged(user => {
-      setUserId(user?.uid || null);
-    });
-
-    return () => unsub();
-  }, []);
 
   // ================= FETCH HEARING =================
   const fetchHearing = async () => {
@@ -132,9 +124,11 @@ function HearingDetails() {
             Save
           </Button>
 
-          <Button variant="danger" onClick={deleteHearing} style={{ flex: 1 }}>
-            Delete
-          </Button>
+          {isLawyer && (
+            <Button variant="danger" onClick={deleteHearing} style={{ flex: 1 }}>
+              Delete
+            </Button>
+          )}
         </div>
       </Card>
     </PageContainer>
