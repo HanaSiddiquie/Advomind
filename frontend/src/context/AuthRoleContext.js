@@ -15,6 +15,8 @@ const AuthRoleContext = createContext(null);
  *             Every page should query/write using ownerId, not auth.currentUser.uid.
  *  - assignedCourts: for secretaries, the court(s) they're allowed to work in.
  *             null for lawyers (they can access all courts).
+ *  - canDelete: true for lawyers always; for secretaries only if their lawyer
+ *             has toggled delete/archive permission on for them.
  *  - profile: the raw users/{uid} Firestore doc
  *  - loading: true until both auth + profile have resolved
  */
@@ -58,6 +60,10 @@ export function AuthRoleProvider({ children }) {
   const assignedCourts = role === "secretary" ? (profile?.assignedCourts || []) : null;
   const isDisabled = role === "secretary" && profile?.disabled === true;
 
+  // Lawyers can always delete/archive. Secretaries only if their lawyer
+  // has explicitly toggled it on for them.
+  const canDelete = role === "lawyer" ? true : role === "secretary" ? profile?.canDelete === true : false;
+
   const value = {
     user,
     profile,
@@ -67,6 +73,7 @@ export function AuthRoleProvider({ children }) {
     isLawyer: role === "lawyer",
     isSecretary: role === "secretary",
     isDisabled,
+    canDelete,
     loading: authLoading || profileLoading,
   };
 

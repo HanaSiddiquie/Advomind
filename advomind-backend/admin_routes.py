@@ -113,6 +113,7 @@ def create_secretary(lawyer_uid):
         "email": email,
         "assignedCourts": assigned_courts,
         "disabled": False,
+        "canDelete": False,
         "createdAt": admin_firestore_now(),
     })
 

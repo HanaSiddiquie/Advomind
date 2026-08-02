@@ -21,7 +21,7 @@ import { useAuthRole } from "../context/AuthRoleContext";
 function Clients() {
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState("");
-  const { ownerId: userId, user, isLawyer } = useAuthRole();
+  const { ownerId: userId, user, canDelete } = useAuthRole();
 
   const navigate = useNavigate();
   const court = localStorage.getItem("court");
@@ -143,7 +143,7 @@ function Clients() {
                 {c.phone && <p style={meta}>{c.phone}</p>}
               </div>
 
-              {isLawyer && (
+              {canDelete && (
                 <Button
                   variant="danger"
                   onClick={() => handleDelete(c.id)}

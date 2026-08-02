@@ -1,7 +1,5 @@
 // frontend/src/pages/ArchivePage.js
 import { useEffect, useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { db } from "../firebase";
 import { useNavigate } from "react-router-dom";
 import { colors, font } from "../styles/theme";
 import PageContainer from "../components/ui/PageContainer";
@@ -9,27 +7,17 @@ import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
 import { useAuthRole } from "../context/AuthRoleContext";
+import { fetchScoped } from "../services/scopedQuery";
 
 function ArchivePage() {
-  const { ownerId: userId } = useAuthRole();
+  const { ownerId: userId, user, isLawyer } = useAuthRole();
   const [cases, setCases] = useState([]);
   const navigate = useNavigate();
 
   // FETCH ARCHIVED CASES
   const fetchArchivedCases = async (uid) => {
     try {
-      const q = query(
-        collection(db, "archive"),
-        where("userId", "==", uid)
-      );
-
-      const snap = await getDocs(q);
-
-      const data = snap.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-
+      const data = await fetchScoped("archive", { ownerId: uid, isLawyer, myUid: user?.uid });
       setCases(data);
     } catch (err) {
       console.error("Error fetching archive:", err);
@@ -38,7 +26,7 @@ function ArchivePage() {
 
   useEffect(() => {
     if (userId) fetchArchivedCases(userId);
-  }, [userId]);
+  }, [userId, isLawyer]);
 
   return (
     <PageContainer title="Archived Cases" subtitle="Closed cases across all courts">

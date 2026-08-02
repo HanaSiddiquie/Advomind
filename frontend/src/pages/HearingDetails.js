@@ -15,7 +15,7 @@ function HearingDetails() {
   const navigate = useNavigate();
 
   const [hearing, setHearing] = useState(null);
-  const { ownerId: userId, isLawyer } = useAuthRole();
+  const { ownerId: userId, canDelete } = useAuthRole();
   const courtType = localStorage.getItem("court");
 
   const [form, setForm] = useState({
@@ -124,7 +124,7 @@ function HearingDetails() {
             Save
           </Button>
 
-          {isLawyer && (
+          {canDelete && (
             <Button variant="danger" onClick={deleteHearing} style={{ flex: 1 }}>
               Delete
             </Button>

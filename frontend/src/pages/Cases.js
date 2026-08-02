@@ -6,6 +6,7 @@ import {
   collection,
   getDocs,
   addDoc,
+  updateDoc,
   deleteDoc,
   doc,
   query,
@@ -18,12 +19,14 @@ import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
 import { useAuthRole } from "../context/AuthRoleContext";
+import { fetchScoped } from "../services/scopedQuery";
 
 function Cases() {
   const [cases, setCases] = useState({ active: [], archived: [] });
   const [clients, setClients] = useState([]);
+  const [secretaries, setSecretaries] = useState([]);
 
-  const { ownerId: userId, user, isLawyer } = useAuthRole();
+  const { ownerId: userId, user, isLawyer, canDelete } = useAuthRole();
   const court = localStorage.getItem("court");
 
   const navigate = useNavigate();
@@ -31,7 +34,8 @@ function Cases() {
   const [form, setForm] = useState({
     client_id: "",
     title: "",
-    description: ""
+    description: "",
+    assignedTo: ""
   });
 
   // ================= FETCH =================
@@ -39,36 +43,35 @@ function Cases() {
     if (!userId || !court) return;
 
     try {
-      const caseQ = query(
-        collection(db, "cases"),
-        where("userId", "==", userId),
-        where("court_type", "==", court)
-      );
+      const scopedOpts = { ownerId: userId, isLawyer, myUid: user?.uid, extraWhere: [where("court_type", "==", court)] };
 
-      const archiveQ = query(
-        collection(db, "archive"),
-        where("userId", "==", userId),
-        where("court_type", "==", court)
-      );
-
-      const clientQ = collection(db, "users", userId, "clients");
-
-      const [caseSnap, archiveSnap, clientSnap] = await Promise.all([
-        getDocs(caseQ),
-        getDocs(archiveQ),
-        getDocs(clientQ)
+      const [active, archived] = await Promise.all([
+        fetchScoped("cases", scopedOpts),
+        fetchScoped("archive", scopedOpts),
       ]);
 
-      const active = caseSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const archived = archiveSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
       setCases({ active, archived });
+
+      const clientQ = collection(db, "users", userId, "clients");
+      const clientSnap = await getDocs(clientQ);
 
       const filteredClients = clientSnap.docs
         .map(d => ({ id: d.id, ...d.data() }))
         .filter(c => c.court_type === court);
 
       setClients(filteredClients);
+
+      // Secretaries assigned to this court — for the "Assign to" pickers.
+      // Lawyers can read any secretary profile where lawyerId == their own uid.
+      if (isLawyer) {
+        const secQ = query(collection(db, "users"), where("lawyerId", "==", userId));
+        const secSnap = await getDocs(secQ);
+        setSecretaries(
+          secSnap.docs
+            .map(d => ({ uid: d.id, ...d.data() }))
+            .filter(s => !s.disabled && (s.assignedCourts || []).includes(court))
+        );
+      }
 
     } catch (err) {
       console.error("FETCH ERROR:", err);
@@ -77,7 +80,7 @@ function Cases() {
 
   useEffect(() => {
     fetchData();
-  }, [userId, court]);
+  }, [userId, court, isLawyer]);
 
   // ================= ADD =================
   const handleSubmit = async () => {
@@ -87,15 +90,26 @@ function Cases() {
     }
 
     await addDoc(collection(db, "cases"), {
-      ...form,
+      client_id: form.client_id,
+      title: form.title,
+      description: form.description,
       userId,
       court_type: court,
       status: "Open",
       createdAt: Date.now(),
-      createdBy: user.uid
+      createdBy: user.uid,
+      assignedTo: isLawyer && form.assignedTo ? form.assignedTo : null
     });
 
-    setForm({ client_id: "", title: "", description: "" });
+    setForm({ client_id: "", title: "", description: "", assignedTo: "" });
+    fetchData();
+  };
+
+  // ================= REASSIGN (lawyer only) =================
+  const reassignCase = async (caseItem, newAssignee) => {
+    await updateDoc(doc(db, "cases", caseItem.id), {
+      assignedTo: newAssignee || null
+    });
     fetchData();
   };
 
@@ -189,6 +203,23 @@ function Cases() {
           style={textareaStyle}
         />
 
+        {isLawyer && (
+          <>
+            <label style={selectLabel}>Assign To (optional)</label>
+            <select
+              className="am-input"
+              style={selectStyle}
+              value={form.assignedTo}
+              onChange={(e) => setForm({ ...form, assignedTo: e.target.value })}
+            >
+              <option value="">Unassigned — visible to all secretaries on this court</option>
+              {secretaries.map(s => (
+                <option key={s.uid} value={s.uid}>{s.name}</option>
+              ))}
+            </select>
+          </>
+        )}
+
         <Button onClick={handleSubmit} full>Add Case</Button>
       </Card>
 
@@ -204,9 +235,28 @@ function Cases() {
               <div onClick={() => navigate(`/cases/${c.id}`)} style={{ cursor: "pointer" }}>
                 <h3 style={caseTitle}>{c.title}</h3>
                 <Badge tone="accent">{c.status}</Badge>
+                {c.assignedTo && (
+                  <Badge tone="dark" style={{ marginLeft: 6 }}>
+                    {secretaries.find(s => s.uid === c.assignedTo)?.name || "Assigned"}
+                  </Badge>
+                )}
               </div>
 
               {isLawyer && (
+                <select
+                  className="am-input"
+                  style={{ ...selectStyle, marginTop: 10, marginBottom: 0, fontSize: 12, padding: "7px 10px" }}
+                  value={c.assignedTo || ""}
+                  onChange={(e) => reassignCase(c, e.target.value)}
+                >
+                  <option value="">Unassigned</option>
+                  {secretaries.map(s => (
+                    <option key={s.uid} value={s.uid}>{s.name}</option>
+                  ))}
+                </select>
+              )}
+
+              {canDelete && (
                 <div style={cardActions}>
                   <Button variant="secondary" onClick={() => archiveCase(c)} style={{ flex: 1 }}>
                     Archive
@@ -233,7 +283,7 @@ function Cases() {
               <h3 style={caseTitle}>{c.title}</h3>
               <Badge tone="neutral">Archived</Badge>
 
-              {isLawyer && (
+              {canDelete && (
                 <Button
                   variant="dark"
                   onClick={() => restoreCase(c)}

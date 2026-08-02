@@ -16,13 +16,14 @@ import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
 import { useAuthRole } from "../context/AuthRoleContext";
+import { fetchScoped } from "../services/scopedQuery";
 
 function Hearings() {
   const [hearings, setHearings] = useState([]);
   const [cases, setCases] = useState([]);
   const [clients, setClients] = useState([]);
 
-  const { ownerId: userId, user } = useAuthRole();
+  const { ownerId: userId, user, isLawyer } = useAuthRole();
   const courtType = localStorage.getItem("court");
 
   const navigate = useNavigate();
@@ -39,17 +40,17 @@ function Hearings() {
     try {
       if (!courtType || !userId) return;
 
-      const caseSnap = await getDocs(
-        query(
-          collection(db, "cases"),
-          where("court_type", "==", courtType),
-          where("userId", "==", userId)
-        )
-      );
+      const scopedOpts = { ownerId: userId, isLawyer, myUid: user?.uid, extraWhere: [where("court_type", "==", courtType)] };
 
-      setCases(caseSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const [caseList, hearingList] = await Promise.all([
+        fetchScoped("cases", scopedOpts),
+        fetchScoped("hearings", scopedOpts),
+      ]);
 
-      // ✅ FIX: clients live under users/{uid}/clients, not a top-level collection
+      setCases(caseList);
+      setHearings(hearingList);
+
+      // ✅ clients live under users/{uid}/clients, not a top-level collection
       const clientSnap = await getDocs(
         query(
           collection(db, "users", userId, "clients"),
@@ -59,21 +60,6 @@ function Hearings() {
 
       setClients(clientSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
-      const hearingSnap = await getDocs(
-        query(
-          collection(db, "hearings"),
-          where("court_type", "==", courtType),
-          where("userId", "==", userId)
-        )
-      );
-
-      setHearings(
-        hearingSnap.docs.map(d => ({
-          id: d.id,
-          ...d.data()
-        }))
-      );
-
     } catch (err) {
       console.log(err);
     }
@@ -81,7 +67,7 @@ function Hearings() {
 
   useEffect(() => {
     fetchData();
-  }, [courtType, userId]);
+  }, [courtType, userId, isLawyer]);
 
   // ================= MAPS =================
   const caseMap = useMemo(() => {
@@ -107,7 +93,8 @@ function Hearings() {
       notes: form.notes,
       court_type: courtType,
       userId,
-      createdBy: user.uid
+      createdBy: user.uid,
+      assignedTo: caseMap[form.case_id]?.assignedTo || null
     });
 
     setForm({ case_id: "", date: "", event: "", notes: "" });

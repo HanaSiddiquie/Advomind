@@ -26,6 +26,7 @@ import PageContainer from "../components/ui/PageContainer";
 import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
+import Badge from "../components/ui/Badge";
 import { useAuthRole } from "../context/AuthRoleContext";
 
 const TABS = ["view", "details", "diary", "hearings", "files"];
@@ -34,12 +35,13 @@ function CaseDetails() {
   const { id } = useParams();
   const caseId = id;
 
-  const { ownerId: userId, user: currentUser, isLawyer } = useAuthRole();
+  const { ownerId: userId, user: currentUser, isLawyer, canDelete } = useAuthRole();
   const courtType = localStorage.getItem("court");
 
   const [caseData, setCaseData] = useState(null);
   const [hearings, setHearings] = useState([]);
   const [files, setFiles] = useState([]);
+  const [secretaries, setSecretaries] = useState([]);
 
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -49,10 +51,16 @@ function CaseDetails() {
   const [form, setForm] = useState({
     title: "",
     description: "",
-    status: "",
-    details: "",
-    diary: ""
+    status: ""
   });
+
+  const [diaryNotes, setDiaryNotes] = useState([]);
+  const [activeNoteId, setActiveNoteId] = useState(null); // null = list view, "new" = creating, or a note id
+  const [noteForm, setNoteForm] = useState({ title: "", body: "" });
+
+  const [detailNotes, setDetailNotes] = useState([]);
+  const [activeDetailNoteId, setActiveDetailNoteId] = useState(null);
+  const [detailNoteForm, setDetailNoteForm] = useState({ title: "", body: "" });
 
   const [hearingForm, setHearingForm] = useState({
     date: "",
@@ -68,14 +76,12 @@ function CaseDetails() {
     const data = snap.data();
     if (data.userId && data.userId !== uid) return;
 
-    setCaseData(data);
+    setCaseData({ id: snap.id, ...data });
 
     setForm({
       title: data.title || "",
       description: data.description || "",
-      status: data.status || "",
-      details: data.details || "",
-      diary: data.diary || ""
+      status: data.status || ""
     });
   };
 
@@ -104,6 +110,54 @@ function CaseDetails() {
     setFiles(snap.docs.map(d => ({ id: d.id, ...d.data() })));
   };
 
+  /* ================= DIARY NOTES ================= */
+  const fetchDiaryNotes = async (uid) => {
+    const q = query(
+      collection(db, "diaryNotes"),
+      where("case_id", "==", caseId),
+      where("userId", "==", uid),
+      where("court_type", "==", courtType)
+    );
+
+    const snap = await getDocs(q);
+
+    const notes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    notes.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+    setDiaryNotes(notes);
+  };
+
+  /* ================= DETAILS NOTES ================= */
+  const fetchDetailNotes = async (uid) => {
+    const q = query(
+      collection(db, "detailsNotes"),
+      where("case_id", "==", caseId),
+      where("userId", "==", uid),
+      where("court_type", "==", courtType)
+    );
+
+    const snap = await getDocs(q);
+
+    const notes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    notes.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+    setDetailNotes(notes);
+  };
+
+  /* ================= SECRETARIES (for Assign To picker, lawyer only) ================= */
+  const fetchSecretaries = async (uid) => {
+    if (!isLawyer) return;
+
+    const q = query(collection(db, "users"), where("lawyerId", "==", uid));
+    const snap = await getDocs(q);
+
+    setSecretaries(
+      snap.docs
+        .map(d => ({ uid: d.id, ...d.data() }))
+        .filter(s => !s.disabled && (s.assignedCourts || []).includes(courtType))
+    );
+  };
+
   /* ================= LOAD ================= */
   useEffect(() => {
     if (!userId) return;
@@ -112,15 +166,18 @@ function CaseDetails() {
       await fetchCase(userId);
       await fetchHearings(userId);
       await fetchFiles(userId);
+      await fetchDiaryNotes(userId);
+      await fetchDetailNotes(userId);
+      await fetchSecretaries(userId);
     };
 
     load();
-  }, [caseId, userId]);
+  }, [caseId, userId, isLawyer]);
 
   /* ================= UPDATE CASE (ARCHIVE ON CLOSE) ================= */
   const updateCase = async () => {
-    if (form.status === "Closed" && !isLawyer) {
-      alert("Only a lawyer can close and archive a case.");
+    if (form.status === "Closed" && !canDelete) {
+      alert("You don't have permission to close and archive a case.");
       return;
     }
 
@@ -134,7 +191,8 @@ function CaseDetails() {
           userId,
           court_type: courtType,
           status: "Closed",
-          archivedAt: Date.now()
+          archivedAt: Date.now(),
+          assignedTo: caseData?.assignedTo || null
         });
 
         await deleteDoc(caseRef);
@@ -152,6 +210,14 @@ function CaseDetails() {
     }
   };
 
+  /* ================= REASSIGN (lawyer only) ================= */
+  const reassignCase = async (newAssignee) => {
+    await updateDoc(doc(db, "cases", caseId), {
+      assignedTo: newAssignee || null
+    });
+    fetchCase(userId);
+  };
+
   /* ================= ADD HEARING ================= */
   const addHearing = async () => {
     if (!hearingForm.date || !hearingForm.event) return;
@@ -161,11 +227,120 @@ function CaseDetails() {
       userId,
       court_type: courtType,
       createdBy: currentUser.uid,
+      assignedTo: caseData?.assignedTo || null,
       ...hearingForm
     });
 
     setHearingForm({ date: "", event: "", notes: "" });
     fetchHearings(userId);
+  };
+
+  /* ================= DIARY NOTE HANDLERS ================= */
+  const openNote = (note) => {
+    setActiveNoteId(note.id);
+    setNoteForm({ title: note.title || "", body: note.body || "" });
+  };
+
+  const startNewNote = () => {
+    setActiveNoteId("new");
+    setNoteForm({ title: "", body: "" });
+  };
+
+  const closeNoteEditor = () => {
+    setActiveNoteId(null);
+    setNoteForm({ title: "", body: "" });
+  };
+
+  const saveNote = async () => {
+    if (!noteForm.title.trim()) {
+      alert("Give the note a header before saving");
+      return;
+    }
+
+    if (activeNoteId === "new") {
+      await addDoc(collection(db, "diaryNotes"), {
+        case_id: caseId,
+        userId,
+        court_type: courtType,
+        createdBy: currentUser.uid,
+        assignedTo: caseData?.assignedTo || null,
+        title: noteForm.title,
+        body: noteForm.body,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      });
+    } else {
+      await updateDoc(doc(db, "diaryNotes", activeNoteId), {
+        title: noteForm.title,
+        body: noteForm.body,
+        updatedAt: Date.now()
+      });
+    }
+
+    closeNoteEditor();
+    fetchDiaryNotes(userId);
+  };
+
+  const deleteNote = async (noteId) => {
+    if (!window.confirm("Delete this note?")) return;
+
+    await deleteDoc(doc(db, "diaryNotes", noteId));
+    closeNoteEditor();
+    fetchDiaryNotes(userId);
+  };
+
+  /* ================= DETAIL NOTE HANDLERS ================= */
+  const openDetailNote = (note) => {
+    setActiveDetailNoteId(note.id);
+    setDetailNoteForm({ title: note.title || "", body: note.body || "" });
+  };
+
+  const startNewDetailNote = () => {
+    setActiveDetailNoteId("new");
+    setDetailNoteForm({ title: "", body: "" });
+  };
+
+  const closeDetailNoteEditor = () => {
+    setActiveDetailNoteId(null);
+    setDetailNoteForm({ title: "", body: "" });
+  };
+
+  const saveDetailNote = async () => {
+    if (!detailNoteForm.title.trim()) {
+      alert("Give the note a header before saving");
+      return;
+    }
+
+    if (activeDetailNoteId === "new") {
+      await addDoc(collection(db, "detailsNotes"), {
+        case_id: caseId,
+        userId,
+        court_type: courtType,
+        createdBy: currentUser.uid,
+        assignedTo: caseData?.assignedTo || null,
+        title: detailNoteForm.title,
+        body: detailNoteForm.body,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      });
+    } else {
+      await updateDoc(doc(db, "detailsNotes", activeDetailNoteId), {
+        title: detailNoteForm.title,
+        body: detailNoteForm.body,
+        updatedAt: Date.now()
+      });
+    }
+
+    closeDetailNoteEditor();
+    fetchDetailNotes(userId);
+  };
+
+  const deleteDetailNote = async (noteId) => {
+    if (!window.confirm("Delete this note?")) return;
+
+    await deleteDoc(doc(db, "detailsNotes", noteId));
+    closeDetailNoteEditor();
+    fetchDetailNotes(userId);
   };
 
   /* ================= FILE UPLOAD ================= */
@@ -188,6 +363,7 @@ function CaseDetails() {
         case_id: caseId,
         userId,
         createdBy: currentUser.uid,
+        assignedTo: caseData?.assignedTo || null,
         name: file.name,
         storagePath: path,
         url,
@@ -205,7 +381,7 @@ function CaseDetails() {
     }
   };
 
-  /* ================= DELETE FILE (lawyer only — matches Firestore rules) ================= */
+  /* ================= DELETE FILE (gated by canDelete — matches Firestore rules) ================= */
   const deleteFile = async (f) => {
     try {
       if (f.storagePath) {
@@ -265,8 +441,31 @@ function CaseDetails() {
               <option>Open</option>
               <option>In Progress</option>
               <option>On Hold</option>
-              {isLawyer && <option>Closed</option>}
+              {canDelete && <option>Closed</option>}
             </select>
+
+            <label style={selectLabel}>Assigned To</label>
+            {isLawyer ? (
+              <select
+                className="am-input"
+                value={caseData.assignedTo || ""}
+                onChange={(e) => reassignCase(e.target.value)}
+                style={selectStyle}
+              >
+                <option value="">Unassigned — visible to all secretaries on this court</option>
+                {secretaries.map(s => (
+                  <option key={s.uid} value={s.uid}>{s.name}</option>
+                ))}
+              </select>
+            ) : (
+              <div style={{ marginBottom: 14 }}>
+                {caseData.assignedTo ? (
+                  <Badge tone="dark">Assigned to you</Badge>
+                ) : (
+                  <Badge tone="neutral">Unassigned</Badge>
+                )}
+              </div>
+            )}
 
             <Button onClick={updateCase} style={{ alignSelf: "flex-start" }}>
               Save Changes
@@ -276,32 +475,130 @@ function CaseDetails() {
 
         {/* DETAILS */}
         {tab === "details" && (
-          <div style={section}>
-            <label style={selectLabel}>Details</label>
-            <textarea
-              className="am-input"
-              value={form.details}
-              onChange={(e) => setForm({ ...form, details: e.target.value })}
-              style={textareaStyle}
-              rows={6}
-            />
-            <Button onClick={updateCase} style={{ alignSelf: "flex-start" }}>Save Details</Button>
-          </div>
+          activeDetailNoteId === null ? (
+            <div style={section}>
+              <Button onClick={startNewDetailNote} style={{ alignSelf: "flex-start", marginBottom: 8 }}>
+                + New Note
+              </Button>
+
+              {detailNotes.length === 0 ? (
+                <p style={emptyText}>No notes yet</p>
+              ) : (
+                detailNotes.map(n => (
+                  <div
+                    key={n.id}
+                    className="am-card-hover"
+                    style={noteRow}
+                    onClick={() => openDetailNote(n)}
+                  >
+                    <div style={noteRowTitle}>{n.title}</div>
+                    <div style={noteRowPreview}>
+                      {n.body ? n.body.slice(0, 80) + (n.body.length > 80 ? "…" : "") : "No details"}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : (
+            <div style={section}>
+              <button onClick={closeDetailNoteEditor} className="am-btn" style={backBtn}>
+                ← Back to notes
+              </button>
+
+              <Input
+                label="Header"
+                placeholder="e.g. Key facts"
+                value={detailNoteForm.title}
+                onChange={(e) => setDetailNoteForm({ ...detailNoteForm, title: e.target.value })}
+              />
+
+              <label style={selectLabel}>Details</label>
+              <textarea
+                className="am-input"
+                placeholder="Write the details here…"
+                value={detailNoteForm.body}
+                onChange={(e) => setDetailNoteForm({ ...detailNoteForm, body: e.target.value })}
+                style={{ ...textareaStyle, minHeight: 160 }}
+                rows={8}
+              />
+
+              <div style={{ display: "flex", gap: 10 }}>
+                <Button onClick={saveDetailNote} style={{ flex: 1 }}>
+                  Save Note
+                </Button>
+
+                {activeDetailNoteId !== "new" && canDelete && (
+                  <Button variant="danger" onClick={() => deleteDetailNote(activeDetailNoteId)} style={{ flex: 1 }}>
+                    Delete
+                  </Button>
+                )}
+              </div>
+            </div>
+          )
         )}
 
         {/* DIARY */}
         {tab === "diary" && (
-          <div style={section}>
-            <label style={selectLabel}>Diary</label>
-            <textarea
-              className="am-input"
-              value={form.diary}
-              onChange={(e) => setForm({ ...form, diary: e.target.value })}
-              style={textareaStyle}
-              rows={6}
-            />
-            <Button onClick={updateCase} style={{ alignSelf: "flex-start" }}>Save Diary</Button>
-          </div>
+          activeNoteId === null ? (
+            <div style={section}>
+              <Button onClick={startNewNote} style={{ alignSelf: "flex-start", marginBottom: 8 }}>
+                + New Note
+              </Button>
+
+              {diaryNotes.length === 0 ? (
+                <p style={emptyText}>No notes yet</p>
+              ) : (
+                diaryNotes.map(n => (
+                  <div
+                    key={n.id}
+                    className="am-card-hover"
+                    style={noteRow}
+                    onClick={() => openNote(n)}
+                  >
+                    <div style={noteRowTitle}>{n.title}</div>
+                    <div style={noteRowPreview}>
+                      {n.body ? n.body.slice(0, 80) + (n.body.length > 80 ? "…" : "") : "No details"}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : (
+            <div style={section}>
+              <button onClick={closeNoteEditor} className="am-btn" style={backBtn}>
+                ← Back to notes
+              </button>
+
+              <Input
+                label="Header"
+                placeholder="e.g. Call with client"
+                value={noteForm.title}
+                onChange={(e) => setNoteForm({ ...noteForm, title: e.target.value })}
+              />
+
+              <label style={selectLabel}>Details</label>
+              <textarea
+                className="am-input"
+                placeholder="Write the details here…"
+                value={noteForm.body}
+                onChange={(e) => setNoteForm({ ...noteForm, body: e.target.value })}
+                style={{ ...textareaStyle, minHeight: 160 }}
+                rows={8}
+              />
+
+              <div style={{ display: "flex", gap: 10 }}>
+                <Button onClick={saveNote} style={{ flex: 1 }}>
+                  Save Note
+                </Button>
+
+                {activeNoteId !== "new" && canDelete && (
+                  <Button variant="danger" onClick={() => deleteNote(activeNoteId)} style={{ flex: 1 }}>
+                    Delete
+                  </Button>
+                )}
+              </div>
+            </div>
+          )
         )}
 
         {/* HEARINGS */}
@@ -358,7 +655,7 @@ function CaseDetails() {
                 <a href={f.url} target="_blank" rel="noreferrer" style={fileLink}>
                   {f.name}
                 </a>
-                {isLawyer && <Button variant="danger" onClick={() => deleteFile(f)}>Delete</Button>}
+                {canDelete && <Button variant="danger" onClick={() => deleteFile(f)}>Delete</Button>}
               </div>
             ))}
           </div>
@@ -429,6 +726,41 @@ const item = {
   borderRadius: radius.sm,
   marginTop: 10,
   background: colors.paper,
+};
+
+const noteRow = {
+  padding: "14px 16px",
+  border: `1px solid ${colors.hairline}`,
+  borderRadius: radius.sm,
+  marginTop: 10,
+  background: colors.paper,
+  cursor: "pointer",
+};
+
+const noteRowTitle = {
+  fontFamily: font.display,
+  fontWeight: 600,
+  fontSize: "14px",
+  color: colors.ink,
+  marginBottom: 4,
+};
+
+const noteRowPreview = {
+  fontSize: "12px",
+  color: colors.slate,
+  lineHeight: 1.4,
+};
+
+const backBtn = {
+  alignSelf: "flex-start",
+  background: "transparent",
+  border: "none",
+  color: colors.accent,
+  fontFamily: font.body,
+  fontSize: "13px",
+  fontWeight: 600,
+  padding: "4px 0",
+  marginBottom: 6,
 };
 
 const itemTitle = {

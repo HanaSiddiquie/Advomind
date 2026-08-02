@@ -8,8 +8,6 @@ import {
   addDoc,
   getDoc,
   collection,
-  getDocs,
-  query,
   where
 } from "firebase/firestore";
 import { colors, font, radius } from "../styles/theme";
@@ -19,6 +17,7 @@ import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
 import { useAuthRole } from "../context/AuthRoleContext";
+import { fetchScoped } from "../services/scopedQuery";
 
 function ClientDetails() {
   const { id } = useParams();
@@ -29,7 +28,7 @@ function ClientDetails() {
   const [hearings, setHearings] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const { ownerId: userId, user } = useAuthRole();
+  const { ownerId: userId, user, isLawyer } = useAuthRole();
   const court = localStorage.getItem("court");
 
   const [form, setForm] = useState({
@@ -69,19 +68,12 @@ function ClientDetails() {
   const fetchCases = async (uid) => {
     if (!uid || !court || !id) return;
 
-    const q = query(
-      collection(db, "cases"),
-      where("client_id", "==", id),
-      where("userId", "==", uid),
-      where("court_type", "==", court)
-    );
-
-    const snap = await getDocs(q);
-
-    const data = snap.docs.map(d => ({
-      id: d.id,
-      ...d.data()
-    }));
+    const data = await fetchScoped("cases", {
+      ownerId: uid,
+      isLawyer,
+      myUid: user?.uid,
+      extraWhere: [where("court_type", "==", court), where("client_id", "==", id)]
+    });
 
     setCases(data);
   };
@@ -90,15 +82,14 @@ function ClientDetails() {
   const fetchHearings = async (uid) => {
     if (!uid || !court) return;
 
-    const q = query(
-      collection(db, "hearings"),
-      where("userId", "==", uid),
-      where("court_type", "==", court)
-    );
+    const data = await fetchScoped("hearings", {
+      ownerId: uid,
+      isLawyer,
+      myUid: user?.uid,
+      extraWhere: [where("court_type", "==", court)]
+    });
 
-    const snap = await getDocs(q);
-
-    setHearings(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    setHearings(data);
   };
 
   /* ================= LOAD ================= */
@@ -118,7 +109,7 @@ function ClientDetails() {
     };
 
     load();
-  }, [id, userId, court]);
+  }, [id, userId, court, isLawyer]);
 
   /* ================= UPDATE CLIENT ================= */
   const updateClient = async () => {
@@ -137,7 +128,8 @@ function ClientDetails() {
       status: "Open",
       court_type: court,
       userId,
-      createdBy: user.uid
+      createdBy: user.uid,
+      assignedTo: null
     });
 
     setCaseForm({ title: "", description: "" });

@@ -1,6 +1,6 @@
 // frontend/src/pages/ManageSecretaries.js
 import { useEffect, useState } from "react";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, updateDoc } from "firebase/firestore";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { db, auth } from "../firebase";
 import { useAuthRole } from "../context/AuthRoleContext";
@@ -23,6 +23,8 @@ function ManageSecretaries() {
   const [secretaries, setSecretaries] = useState([]);
   const [busyUid, setBusyUid] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [editingUid, setEditingUid] = useState(null);
+  const [editForm, setEditForm] = useState({ assignedCourts: [], canDelete: false });
 
   const [form, setForm] = useState({
     name: "",
@@ -102,6 +104,45 @@ function ManageSecretaries() {
     }
   };
 
+  const startEditing = (secretary) => {
+    setEditingUid(secretary.uid);
+    setEditForm({
+      assignedCourts: secretary.assignedCourts || [],
+      canDelete: secretary.canDelete === true
+    });
+  };
+
+  const toggleEditCourt = (key) => {
+    setEditForm(f => ({
+      ...f,
+      assignedCourts: f.assignedCourts.includes(key)
+        ? f.assignedCourts.filter(c => c !== key)
+        : [...f.assignedCourts, key]
+    }));
+  };
+
+  const saveEdit = async (secretaryUid) => {
+    if (editForm.assignedCourts.length === 0) {
+      alert("A secretary needs at least one assigned court");
+      return;
+    }
+
+    setBusyUid(secretaryUid);
+    try {
+      // Allowed directly via Firestore rules — a lawyer can update fields
+      // (other than role/lawyerId) on their own secretaries' profiles.
+      await updateDoc(doc(db, "users", secretaryUid), {
+        assignedCourts: editForm.assignedCourts,
+        canDelete: editForm.canDelete
+      });
+      setEditingUid(null);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setBusyUid(null);
+    }
+  };
+
   return (
     <PageContainer
       title="Manage Secretaries"
@@ -159,33 +200,88 @@ function ManageSecretaries() {
               <h3 style={secName}>{s.name}</h3>
               <p style={meta}>{s.email}</p>
 
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "10px 0" }}>
-                {(s.assignedCourts || []).map(c => (
-                  <Badge key={c} tone="accent">{c}</Badge>
-                ))}
-                <Badge tone={s.disabled ? "danger" : "success"}>
-                  {s.disabled ? "Disabled" : "Active"}
-                </Badge>
-              </div>
+              {editingUid === s.uid ? (
+                <>
+                  <label style={{ ...selectLabel, marginTop: 12 }}>Assigned Courts</label>
+                  <div style={courtRow}>
+                    {COURTS.map(c => (
+                      <button
+                        key={c.key}
+                        type="button"
+                        className="am-btn"
+                        onClick={() => toggleEditCourt(c.key)}
+                        style={editForm.assignedCourts.includes(c.key) ? courtChipActive : courtChip}
+                      >
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
 
-              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <Button
-                  variant="secondary"
-                  onClick={() => handleToggleDisabled(s)}
-                  disabled={busyUid === s.uid}
-                  style={{ flex: 1 }}
-                >
-                  {s.disabled ? "Enable" : "Disable"}
-                </Button>
-                <Button
-                  variant="danger"
-                  onClick={() => handleDelete(s)}
-                  disabled={busyUid === s.uid}
-                  style={{ flex: 1 }}
-                >
-                  Remove
-                </Button>
-              </div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, fontSize: 13, color: colors.charcoal, cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={editForm.canDelete}
+                      onChange={(e) => setEditForm(f => ({ ...f, canDelete: e.target.checked }))}
+                    />
+                    Allow deleting &amp; archiving
+                  </label>
+
+                  <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                    <Button
+                      onClick={() => saveEdit(s.uid)}
+                      disabled={busyUid === s.uid}
+                      style={{ flex: 1 }}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => setEditingUid(null)}
+                      style={{ flex: 1 }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "10px 0" }}>
+                    {(s.assignedCourts || []).map(c => (
+                      <Badge key={c} tone="accent">{c}</Badge>
+                    ))}
+                    <Badge tone={s.disabled ? "danger" : "success"}>
+                      {s.disabled ? "Disabled" : "Active"}
+                    </Badge>
+                    {s.canDelete && <Badge tone="dark">Can delete</Badge>}
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                    <Button
+                      variant="secondary"
+                      onClick={() => startEditing(s)}
+                      style={{ flex: 1 }}
+                    >
+                      Edit Access
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => handleToggleDisabled(s)}
+                      disabled={busyUid === s.uid}
+                      style={{ flex: 1 }}
+                    >
+                      {s.disabled ? "Enable" : "Disable"}
+                    </Button>
+                    <Button
+                      variant="danger"
+                      onClick={() => handleDelete(s)}
+                      disabled={busyUid === s.uid}
+                      style={{ flex: 1 }}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </>
+              )}
             </Card>
           ))}
         </div>
