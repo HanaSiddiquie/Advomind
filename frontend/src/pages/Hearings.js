@@ -15,6 +15,7 @@ import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
+import { CMS_URL } from "../services/cms";
 import { useAuthRole } from "../context/AuthRoleContext";
 import { fetchScoped } from "../services/scopedQuery";
 
@@ -121,6 +122,11 @@ function Hearings() {
       eyebrow={courtType?.toUpperCase()}
       title="Hearings Timeline"
       subtitle="Schedule and track upcoming hearings"
+      action={
+        <a href={CMS_URL} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
+          <Button variant="secondary">Open CMS ↗</Button>
+        </a>
+      }
     >
       {/* FORM */}
       <Card style={{ marginBottom: 25 }}>

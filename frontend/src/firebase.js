@@ -1,7 +1,9 @@
+// frontend/src/firebase.js
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
+import { getMessaging, isSupported } from "firebase/messaging";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD842yEAQgwtTZZhaXCGFILNP-XxGBrNCo",
@@ -20,3 +22,9 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+
+// Messaging isn't supported in every browser/context (e.g. Safari's older
+// push support, or non-HTTPS in dev) - isSupported() checks before we try.
+export const messagingPromise = isSupported().then((supported) =>
+  supported ? getMessaging(app) : null
+);

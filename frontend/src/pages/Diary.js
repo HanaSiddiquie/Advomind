@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { collection, query, where, getDocs, addDoc, deleteDoc, doc } from "firebase/firestore";
 import { db } from "../firebase";
-import { colors, font, radius } from "../styles/theme";
+import { colors, font, radius, shadow } from "../styles/theme";
 import PageContainer from "../components/ui/PageContainer";
 import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
@@ -12,6 +12,7 @@ import { useAuthRole } from "../context/AuthRoleContext";
 import { fetchScoped } from "../services/scopedQuery";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const ALL_COURTS = ["civil", "session", "high"];
 
 function toDateKey(d) {
   const y = d.getFullYear();
@@ -21,8 +22,10 @@ function toDateKey(d) {
 }
 
 function Diary() {
-  const { ownerId: userId, user, isLawyer, canDelete } = useAuthRole();
-  const court = localStorage.getItem("court");
+  const { ownerId: userId, user, isLawyer, assignedCourts, canDelete } = useAuthRole();
+  const activeCourt = localStorage.getItem("court");
+
+  const [scope, setScope] = useState("current"); // "current" | "all"
 
   const [viewMonth, setViewMonth] = useState(() => {
     const now = new Date();
@@ -35,40 +38,49 @@ function Diary() {
 
   const [newEvent, setNewEvent] = useState({ title: "", notes: "" });
 
-  // ================= FETCH HEARINGS (respects case-assignment visibility) =================
+  const courtsInScope = scope === "current"
+    ? [activeCourt].filter(Boolean)
+    : (isLawyer ? ALL_COURTS : (assignedCourts || []));
+
   const fetchHearings = async () => {
-    if (!userId || !court) return;
+    if (!userId || courtsInScope.length === 0) return;
 
-    const data = await fetchScoped("hearings", {
-      ownerId: userId,
-      isLawyer,
-      myUid: user?.uid,
-      extraWhere: [where("court_type", "==", court)]
-    });
-
-    setHearings(data);
-  };
-
-  // ================= FETCH STANDALONE CALENDAR EVENTS =================
-  const fetchEvents = async () => {
-    if (!userId || !court) return;
-
-    const q = query(
-      collection(db, "diaryEvents"),
-      where("userId", "==", userId),
-      where("court_type", "==", court)
+    const lists = await Promise.all(
+      courtsInScope.map(c =>
+        fetchScoped("hearings", {
+          ownerId: userId,
+          isLawyer,
+          myUid: user?.uid,
+          extraWhere: [where("court_type", "==", c)]
+        })
+      )
     );
 
-    const snap = await getDocs(q);
-    setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    setHearings(lists.flat());
+  };
+
+  const fetchEvents = async () => {
+    if (!userId || courtsInScope.length === 0) return;
+
+    const snaps = await Promise.all(
+      courtsInScope.map(c =>
+        getDocs(query(
+          collection(db, "diaryEvents"),
+          where("userId", "==", userId),
+          where("court_type", "==", c)
+        ))
+      )
+    );
+
+    setEvents(snaps.flatMap(snap => snap.docs.map(d => ({ id: d.id, ...d.data() }))));
   };
 
   useEffect(() => {
     fetchHearings();
     fetchEvents();
-  }, [userId, court, isLawyer]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, scope, activeCourt, isLawyer, JSON.stringify(assignedCourts)]);
 
-  // ================= GROUP BY DATE =================
   const hearingsByDate = useMemo(() => {
     const map = {};
     hearings.forEach(h => {
@@ -89,16 +101,31 @@ function Diary() {
     return map;
   }, [events]);
 
-  // ================= ADD EVENT =================
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const isPastDate = (dateStr) => new Date(dateStr + "T00:00:00") < today;
+
+  const stats = useMemo(() => {
+    const upcoming = hearings.filter(h => h.date && !isPastDate(h.date));
+    const past = hearings.filter(h => h.date && isPastDate(h.date));
+    return { total: hearings.length, upcoming: upcoming.length, past: past.length };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hearings]);
+
   const addEvent = async () => {
     if (!newEvent.title.trim()) {
       alert("Give the event a title first");
       return;
     }
+    if (scope !== "current") {
+      alert("Switch to 'This Court' to add an event.");
+      return;
+    }
 
     await addDoc(collection(db, "diaryEvents"), {
       userId,
-      court_type: court,
+      court_type: activeCourt,
       date: selectedDate,
       title: newEvent.title,
       notes: newEvent.notes,
@@ -115,7 +142,6 @@ function Diary() {
     fetchEvents();
   };
 
-  // ================= CALENDAR GRID =================
   const year = viewMonth.getFullYear();
   const month = viewMonth.getMonth();
 
@@ -134,8 +160,6 @@ function Diary() {
   const selectedHearings = hearingsByDate[selectedDate] || [];
   const selectedEvents = eventsByDate[selectedDate] || [];
 
-  // ================= COMBINED LIST (same state as the calendar, so adding/
-  // deleting in either place is reflected in both automatically) =================
   const allDates = useMemo(() => {
     const set = new Set([...Object.keys(hearingsByDate), ...Object.keys(eventsByDate)]);
     return Array.from(set).sort();
@@ -151,13 +175,45 @@ function Diary() {
 
   return (
     <PageContainer
-      eyebrow={court?.toUpperCase()}
+      eyebrow={scope === "current" ? activeCourt?.toUpperCase() : "ALL COURTS"}
       title="Case Diary"
       subtitle="A calendar of hearings and events across your caseload"
+      action={
+        <div style={toggleRow}>
+          <button
+            className="am-btn"
+            onClick={() => setScope("current")}
+            style={scope === "current" ? toggleBtnActive : toggleBtn}
+          >
+            This Court
+          </button>
+          <button
+            className="am-btn"
+            onClick={() => setScope("all")}
+            style={scope === "all" ? toggleBtnActive : toggleBtn}
+          >
+            All Courts
+          </button>
+        </div>
+      }
     >
+      <div style={statsGrid}>
+        <div style={{ ...cardStat, borderLeftColor: colors.ink }}>
+          <div style={statValue}>{stats.total}</div>
+          <div style={statLabel}>Total Hearings</div>
+        </div>
+        <div style={{ ...cardStat, borderLeftColor: colors.success }}>
+          <div style={statValue}>{stats.upcoming}</div>
+          <div style={statLabel}>Upcoming</div>
+        </div>
+        <div style={{ ...cardStat, borderLeftColor: colors.danger }}>
+          <div style={statValue}>{stats.past}</div>
+          <div style={statLabel}>Past / Overdue</div>
+        </div>
+      </div>
+
       <div style={layout}>
 
-        {/* CALENDAR */}
         <Card>
           <div style={monthHeader}>
             <button className="am-btn" onClick={() => goToMonth(-1)} style={navBtn}>‹</button>
@@ -204,7 +260,6 @@ function Diary() {
           </div>
         </Card>
 
-        {/* SELECTED DAY PANEL */}
         <Card>
           <h3 style={panelTitle}>
             {new Date(selectedDate + "T00:00:00").toLocaleDateString("default", {
@@ -218,7 +273,10 @@ function Diary() {
 
           {selectedHearings.map(h => (
             <div key={h.id} style={entryRow}>
-              <Badge tone="accent">Hearing</Badge>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <Badge tone="accent">Hearing</Badge>
+                {scope === "all" && <Badge tone="neutral">{(h.court_type || "").toUpperCase()}</Badge>}
+              </div>
               <div style={entryTitle}>{h.event}</div>
               {h.notes && <div style={entryMeta}>{h.notes}</div>}
             </div>
@@ -228,44 +286,53 @@ function Diary() {
             <div key={e.id} style={entryRow}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <Badge tone="dark">Event</Badge>
-                {canDelete && (
-                  <button className="am-btn" onClick={() => deleteEvent(e.id)} style={deleteLink}>
-                    Delete
-                  </button>
-                )}
+                <div style={{ display: "flex", gap: 6 }}>
+                  {scope === "all" && <Badge tone="neutral">{(e.court_type || "").toUpperCase()}</Badge>}
+                  {canDelete && (
+                    <button className="am-btn" onClick={() => deleteEvent(e.id)} style={deleteLink}>
+                      Delete
+                    </button>
+                  )}
+                </div>
               </div>
               <div style={entryTitle}>{e.title}</div>
               {e.notes && <div style={entryMeta}>{e.notes}</div>}
             </div>
           ))}
 
-          <h4 style={addTitle}>Add Event</h4>
+          {scope === "current" ? (
+            <>
+              <h4 style={addTitle}>Add Event</h4>
 
-          <Input
-            label="Title"
-            placeholder="e.g. Client meeting"
-            value={newEvent.title}
-            onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
-          />
+              <Input
+                label="Title"
+                placeholder="e.g. Client meeting"
+                value={newEvent.title}
+                onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
+              />
 
-          <label style={selectLabel}>Notes</label>
-          <textarea
-            className="am-input"
-            placeholder="Optional notes"
-            value={newEvent.notes}
-            onChange={(e) => setNewEvent({ ...newEvent, notes: e.target.value })}
-            style={textareaStyle}
-          />
+              <label style={selectLabel}>Notes</label>
+              <textarea
+                className="am-input"
+                placeholder="Optional notes"
+                value={newEvent.notes}
+                onChange={(e) => setNewEvent({ ...newEvent, notes: e.target.value })}
+                style={textareaStyle}
+              />
 
-          <Button onClick={addEvent} full>
-            Add to {new Date(selectedDate + "T00:00:00").toLocaleDateString("default", { month: "short", day: "numeric" })}
-          </Button>
+              <Button onClick={addEvent} full>
+                Add to {new Date(selectedDate + "T00:00:00").toLocaleDateString("default", { month: "short", day: "numeric" })}
+              </Button>
+            </>
+          ) : (
+            <p style={{ ...emptyText, marginTop: 18 }}>
+              Switch to "This Court" to add a new event.
+            </p>
+          )}
         </Card>
 
       </div>
 
-      {/* FULL LIST — same underlying state as the calendar above, so
-          anything added/removed here or up top shows in both places */}
       <h3 style={listHeading}>All Scheduled Items</h3>
 
       {allDates.length === 0 ? (
@@ -289,6 +356,7 @@ function Diary() {
             {(hearingsByDate[dateKey] || []).map(h => (
               <div key={h.id} style={listRow} onClick={() => jumpToDate(dateKey)}>
                 <Badge tone="accent">Hearing</Badge>
+                {scope === "all" && <Badge tone="neutral" style={{ marginLeft: 6 }}>{(h.court_type || "").toUpperCase()}</Badge>}
                 <div style={entryTitle}>{h.event}</div>
                 {h.notes && <div style={entryMeta}>{h.notes}</div>}
               </div>
@@ -297,6 +365,7 @@ function Diary() {
             {(eventsByDate[dateKey] || []).map(e => (
               <div key={e.id} style={listRow} onClick={() => jumpToDate(dateKey)}>
                 <Badge tone="dark">Event</Badge>
+                {scope === "all" && <Badge tone="neutral" style={{ marginLeft: 6 }}>{(e.court_type || "").toUpperCase()}</Badge>}
                 <div style={entryTitle}>{e.title}</div>
                 {e.notes && <div style={entryMeta}>{e.notes}</div>}
               </div>
@@ -309,6 +378,58 @@ function Diary() {
 }
 
 /* ================= STYLES ================= */
+
+const toggleRow = { display: "flex", gap: 6 };
+
+const toggleBtn = {
+  padding: "8px 14px",
+  borderRadius: radius.sm,
+  border: `1px solid ${colors.hairline}`,
+  background: colors.surface,
+  color: colors.charcoal,
+  fontFamily: font.body,
+  fontSize: "13px",
+  fontWeight: 600,
+};
+
+const toggleBtnActive = {
+  ...toggleBtn,
+  background: colors.ink,
+  color: colors.white,
+  border: `1px solid ${colors.ink}`,
+};
+
+const statsGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, 1fr)",
+  gap: "14px",
+  marginBottom: 20,
+};
+
+const cardStat = {
+  background: colors.surface,
+  padding: "18px 20px",
+  borderRadius: radius.md,
+  boxShadow: shadow.sm,
+  border: `1px solid ${colors.hairline}`,
+  borderLeft: "4px solid",
+};
+
+const statValue = {
+  fontFamily: font.display,
+  fontSize: "28px",
+  fontWeight: 600,
+  color: colors.ink,
+};
+
+const statLabel = {
+  fontSize: "12px",
+  color: colors.slate,
+  marginTop: "4px",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  fontWeight: 600,
+};
 
 const layout = {
   display: "grid",

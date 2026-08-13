@@ -6,8 +6,6 @@ import {
   collection,
   getDocs,
   addDoc,
-  deleteDoc,
-  doc,
   query,
   where
 } from "firebase/firestore";
@@ -17,10 +15,12 @@ import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 import { useAuthRole } from "../context/AuthRoleContext";
+import { cascadeDeleteClient } from "../services/cascadeDelete";
 
 function Clients() {
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState("");
+  const [deletingId, setDeletingId] = useState(null);
   const { ownerId: userId, user, canDelete } = useAuthRole();
 
   const navigate = useNavigate();
@@ -67,9 +67,28 @@ function Clients() {
     fetchClients();
   };
 
-  // ================= DELETE =================
-  const handleDelete = async (id) => {
-    await deleteDoc(doc(db, "users", userId, "clients", id));
+  // ================= DELETE (cascades to cases, hearings, notes, files) =================
+  const handleDelete = async (id, name) => {
+    const confirmed = window.confirm(
+      `Delete ${name || "this client"}? This will also permanently delete every case, hearing, ` +
+      `note, and file attached to them (active and archived). This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setDeletingId(id);
+    try {
+      const result = await cascadeDeleteClient({ clientId: id, ownerId: userId, court });
+      const parts = [];
+      if (result.deletedCases) parts.push(`${result.deletedCases} case(s)`);
+      if (result.deletedArchivedCases) parts.push(`${result.deletedArchivedCases} archived case(s)`);
+      if (parts.length) alert(`Client deleted, along with ${parts.join(" and ")}.`);
+    } catch (err) {
+      console.error(err);
+      alert("Something went wrong deleting this client. Some related records may remain — please try again.");
+    } finally {
+      setDeletingId(null);
+    }
+
     fetchClients();
   };
 
@@ -132,12 +151,14 @@ function Clients() {
           <p style={emptyText}>No clients found</p>
         ) : (
           filteredClients.map(c => (
-            <Card key={c.id} hoverable style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+            <Card
+              key={c.id}
+              hoverable
+              onClick={() => navigate(`/clients/${c.id}`)}
+              style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}
+            >
 
-              <div
-                style={{ cursor: "pointer" }}
-                onClick={() => navigate(`/clients/${c.id}`)}
-              >
+              <div>
                 <h3 style={clientName}>{c.name}</h3>
                 <p style={meta}>CNIC: {c.cnic}</p>
                 {c.phone && <p style={meta}>{c.phone}</p>}
@@ -146,11 +167,15 @@ function Clients() {
               {canDelete && (
                 <Button
                   variant="danger"
-                  onClick={() => handleDelete(c.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(c.id, c.name);
+                  }}
+                  disabled={deletingId === c.id}
                   full
                   style={{ marginTop: 14 }}
                 >
-                  Delete
+                  {deletingId === c.id ? "Deleting…" : "Delete"}
                 </Button>
               )}
             </Card>

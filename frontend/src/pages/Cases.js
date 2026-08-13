@@ -6,6 +6,7 @@ import {
   collection,
   getDocs,
   addDoc,
+  setDoc,
   updateDoc,
   deleteDoc,
   doc,
@@ -17,9 +18,11 @@ import PageContainer from "../components/ui/PageContainer";
 import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
+import { CMS_URL } from "../services/cms";
 import Badge from "../components/ui/Badge";
 import { useAuthRole } from "../context/AuthRoleContext";
 import { fetchScoped } from "../services/scopedQuery";
+import { cascadeDeleteCase, cascadeDeleteArchivedCase } from "../services/cascadeDelete";
 
 function Cases() {
   const [cases, setCases] = useState({ active: [], archived: [] });
@@ -113,9 +116,16 @@ function Cases() {
     fetchData();
   };
 
-  // ================= DELETE =================
+  // ================= DELETE (cascades to hearings, notes, files) =================
   const handleDelete = async (id) => {
-    await deleteDoc(doc(db, "cases", id));
+    if (!window.confirm("Delete this case? This also permanently deletes its hearings, notes, and files.")) return;
+
+    try {
+      await cascadeDeleteCase({ caseId: id, ownerId: userId });
+    } catch (err) {
+      console.error(err);
+      alert("Something went wrong deleting this case. Please try again.");
+    }
     fetchData();
   };
 
@@ -138,12 +148,14 @@ function Cases() {
     }
   };
 
-  // ================= RESTORE =================
+  // ================= RESTORE (preserves original case ID so hearings/notes/files stay linked) =================
   const restoreCase = async (caseItem) => {
     try {
       const { id, originalCaseId, archivedAt, ...cleanData } = caseItem;
 
-      await addDoc(collection(db, "cases"), {
+      const restoredId = originalCaseId || id;
+
+      await setDoc(doc(db, "cases", restoredId), {
         ...cleanData,
         status: "Open",
         restoredAt: Date.now()
@@ -157,11 +169,33 @@ function Cases() {
     }
   };
 
+  // ================= PERMANENTLY DELETE ARCHIVED CASE =================
+  const permanentlyDeleteArchived = async (caseItem) => {
+    if (!window.confirm("Permanently delete this archived case and all its hearings, notes, and files? This cannot be undone.")) return;
+
+    try {
+      await cascadeDeleteArchivedCase({
+        archiveDocId: caseItem.id,
+        originalCaseId: caseItem.originalCaseId,
+        ownerId: userId
+      });
+    } catch (err) {
+      console.error(err);
+      alert("Something went wrong deleting this case. Please try again.");
+    }
+    fetchData();
+  };
+
   return (
     <PageContainer
       eyebrow={court?.toUpperCase()}
       title="Cases"
       subtitle="Manage active case files and view your archive"
+      action={
+        <a href={CMS_URL} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
+          <Button variant="secondary">Open CMS ↗</Button>
+        </a>
+      }
     >
       {/* FORM */}
       <Card style={{ marginBottom: 28 }}>
@@ -284,14 +318,22 @@ function Cases() {
               <Badge tone="neutral">Archived</Badge>
 
               {canDelete && (
-                <Button
-                  variant="dark"
-                  onClick={() => restoreCase(c)}
-                  full
-                  style={{ marginTop: 14 }}
-                >
-                  Restore
-                </Button>
+                <div style={cardActions}>
+                  <Button
+                    variant="dark"
+                    onClick={() => restoreCase(c)}
+                    style={{ flex: 1 }}
+                  >
+                    Restore
+                  </Button>
+                  <Button
+                    variant="danger"
+                    onClick={() => permanentlyDeleteArchived(c)}
+                    style={{ flex: 1 }}
+                  >
+                    Delete
+                  </Button>
+                </div>
               )}
             </Card>
           ))

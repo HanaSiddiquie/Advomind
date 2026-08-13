@@ -17,6 +17,7 @@ function Auth() {
   const [loading, setLoading] = useState(false);
 
   const [form, setForm] = useState({
+    name: "",
     email: "",
     password: ""
   });
@@ -39,12 +40,18 @@ function Auth() {
   // Self-registration is always as a lawyer — secretary accounts can only
   // be created by a lawyer via the backend (see Manage Secretaries page).
   const handleSignup = async () => {
+    if (!form.name.trim()) {
+      alert("Please enter your name");
+      return;
+    }
+
     setLoading(true);
     try {
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
 
       await setDoc(doc(db, "users", cred.user.uid), {
         role: "lawyer",
+        name: form.name.trim(),
         email: form.email,
         createdAt: serverTimestamp()
       });
@@ -91,6 +98,16 @@ function Auth() {
             Signup
           </button>
         </div>
+
+        {!isLogin && (
+          <Input
+            name="name"
+            placeholder="Your full name"
+            label="Name"
+            value={form.name}
+            onChange={handleChange}
+          />
+        )}
 
         <Input
           name="email"

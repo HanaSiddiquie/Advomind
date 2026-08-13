@@ -28,6 +28,7 @@ import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
 import { useAuthRole } from "../context/AuthRoleContext";
+import { CMS_URL } from "../services/cms";
 
 const TABS = ["view", "details", "diary", "hearings", "files"];
 
@@ -39,6 +40,7 @@ function CaseDetails() {
   const courtType = localStorage.getItem("court");
 
   const [caseData, setCaseData] = useState(null);
+  const [clientName, setClientName] = useState("");
   const [hearings, setHearings] = useState([]);
   const [files, setFiles] = useState([]);
   const [secretaries, setSecretaries] = useState([]);
@@ -77,12 +79,24 @@ function CaseDetails() {
     if (data.userId && data.userId !== uid) return;
 
     setCaseData({ id: snap.id, ...data });
+    fetchClientName(uid, data.client_id);
 
     setForm({
       title: data.title || "",
       description: data.description || "",
       status: data.status || ""
     });
+  };
+
+  /* ================= CLIENT NAME ================= */
+  const fetchClientName = async (uid, clientId) => {
+    if (!clientId) {
+      setClientName("");
+      return;
+    }
+
+    const snap = await getDoc(doc(db, "users", uid, "clients", clientId));
+    setClientName(snap.exists() ? snap.data().name || "" : "");
   };
 
   /* ================= HEARINGS ================= */
@@ -103,7 +117,8 @@ function CaseDetails() {
     const q = query(
       collection(db, "files"),
       where("case_id", "==", caseId),
-      where("userId", "==", uid)
+      where("userId", "==", uid),
+      where("court_type", "==", courtType)
     );
 
     const snap = await getDocs(q);
@@ -362,6 +377,7 @@ function CaseDetails() {
       await addDoc(collection(db, "files"), {
         case_id: caseId,
         userId,
+        court_type: courtType,
         createdBy: currentUser.uid,
         assignedTo: caseData?.assignedTo || null,
         name: file.name,
@@ -404,7 +420,16 @@ function CaseDetails() {
   if (!caseData) return <PageContainer title="Case Dashboard"><p style={emptyText}>Loading…</p></PageContainer>;
 
   return (
-    <PageContainer eyebrow={courtType?.toUpperCase()} title={caseData.title || "Case Dashboard"}>
+    <PageContainer
+      eyebrow={courtType?.toUpperCase()}
+      title={caseData.title || "Case Dashboard"}
+      subtitle={clientName ? `Client: ${clientName}` : undefined}
+      action={
+        <a href={CMS_URL} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
+          <Button variant="secondary">Open in CMS ↗</Button>
+        </a>
+      }
+    >
 
       <div style={tabs}>
         {TABS.map(t => (

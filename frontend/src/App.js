@@ -20,11 +20,13 @@ import CaseDetails from "./pages/CaseDetails";
 
 import Hearings from "./pages/Hearings";
 import HearingDetails from "./pages/HearingDetails";
+import CourtDayPrep from "./pages/CourtDayPrep";
 
-import HearingsDashboard from "./pages/HearingsDashboard";
 import ArchivePage from "./pages/ArchivePage";
 import Diary from "./pages/Diary";
 import ManageSecretaries from "./pages/ManageSecretaries";
+import SearchPage from "./pages/SearchPage";
+import NotificationSetup from "./components/NotificationSetup";
 
 // Shown instead of redirecting when we can't resolve a role — redirecting
 // here would just bounce back and forth with the Auth page forever.
@@ -73,6 +75,7 @@ function Protected({ children, requireCourt = true, lawyerOnly = false }) {
   return (
     <>
       <Navbar />
+      <NotificationSetup />
       {children}
     </>
   );
@@ -147,9 +150,10 @@ function AppRoutes() {
       <Route path="/hearings" element={<Protected><Hearings /></Protected>} />
       <Route path="/hearings/:id" element={<Protected><HearingDetails /></Protected>} />
 
-      <Route path="/hearings-dashboard" element={<Protected><HearingsDashboard /></Protected>} />
       <Route path="/archive" element={<Protected><ArchivePage /></Protected>} />
       <Route path="/diary" element={<Protected><Diary /></Protected>} />
+      <Route path="/search" element={<Protected><SearchPage /></Protected>} />
+      <Route path="/court-day-prep" element={<Protected><CourtDayPrep /></Protected>} />
 
       {/* LAWYER-ONLY */}
       <Route

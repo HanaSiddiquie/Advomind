@@ -13,13 +13,16 @@ const BASE_LINKS = [
   { to: "/hearings", label: "Hearings" },
   { to: "/diary", label: "Diary" },
   { to: "/archive", label: "Archive" },
+  { to: "/search", label: "Search" },
+  { to: "/court-day-prep", label: "Court Day Prep" },
 ];
 
 function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const court = localStorage.getItem("court");
-  const { isLawyer } = useAuthRole();
+  const { isLawyer, profile } = useAuthRole();
+  const displayName = profile?.name || profile?.email || "User";
 
   const NAV_LINKS = isLawyer
     ? [...BASE_LINKS, { to: "/secretaries", label: "Secretaries" }]
@@ -36,6 +39,7 @@ function Navbar() {
       {/* LEFT: BRAND */}
       <div style={left}>
         <h2 style={brand}>⚖ ADVOMIND</h2>
+        <span style={nameTag}>{displayName}</span>
         {court && <span style={courtTag}>{court.toUpperCase()} COURT</span>}
         <span style={roleTag}>{isLawyer ? "Lawyer" : "Secretary"}</span>
       </div>
@@ -144,6 +148,13 @@ const roleTag = {
   border: "1px solid #4A4A4E",
   borderRadius: "6px",
   color: "#D6D7DA",
+};
+
+const nameTag = {
+  fontSize: "13px",
+  fontWeight: 600,
+  color: colors.white,
+  paddingRight: "4px",
 };
 
 export default Navbar;
