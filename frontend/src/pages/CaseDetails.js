@@ -1,9 +1,10 @@
 // frontend/src/pages/CaseDetails.js
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   doc,
   getDoc,
+  setDoc,
   updateDoc,
   collection,
   query,
@@ -29,12 +30,14 @@ import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
 import { useAuthRole } from "../context/AuthRoleContext";
 import { CMS_URL } from "../services/cms";
+import { cascadeDeleteArchivedCase } from "../services/cascadeDelete";
 
 const TABS = ["view", "details", "diary", "hearings", "files"];
 
 function CaseDetails() {
   const { id } = useParams();
   const caseId = id;
+  const navigate = useNavigate();
 
   const { ownerId: userId, user: currentUser, isLawyer, canDelete } = useAuthRole();
   const courtType = localStorage.getItem("court");
@@ -44,6 +47,12 @@ function CaseDetails() {
   const [hearings, setHearings] = useState([]);
   const [files, setFiles] = useState([]);
   const [secretaries, setSecretaries] = useState([]);
+
+  // ================= ARCHIVED-CASE FALLBACK =================
+  // If a case has been archived, its doc under "cases" is gone — this page
+  // needs to fall back to the "archive" collection instead of erroring.
+  const [archivedDoc, setArchivedDoc] = useState(null);
+  const [lookupDone, setLookupDone] = useState(false);
 
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -70,24 +79,6 @@ function CaseDetails() {
     notes: ""
   });
 
-  /* ================= CASE ================= */
-  const fetchCase = async (uid) => {
-    const snap = await getDoc(doc(db, "cases", caseId));
-    if (!snap.exists()) return;
-
-    const data = snap.data();
-    if (data.userId && data.userId !== uid) return;
-
-    setCaseData({ id: snap.id, ...data });
-    fetchClientName(uid, data.client_id);
-
-    setForm({
-      title: data.title || "",
-      description: data.description || "",
-      status: data.status || ""
-    });
-  };
-
   /* ================= CLIENT NAME ================= */
   const fetchClientName = async (uid, clientId) => {
     if (!clientId) {
@@ -97,6 +88,107 @@ function CaseDetails() {
 
     const snap = await getDoc(doc(db, "users", uid, "clients", clientId));
     setClientName(snap.exists() ? snap.data().name || "" : "");
+  };
+
+  /* ================= CASE (with archive fallback) ================= */
+  const fetchCase = async (uid) => {
+    setLookupDone(false);
+
+    try {
+      const snap = await getDoc(doc(db, "cases", caseId));
+
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.userId && data.userId !== uid) {
+          setCaseData(null);
+          setArchivedDoc(null);
+          setLookupDone(true);
+          return;
+        }
+
+        setCaseData({ id: snap.id, ...data });
+        setArchivedDoc(null);
+        fetchClientName(uid, data.client_id);
+
+        setForm({
+          title: data.title || "",
+          description: data.description || "",
+          status: data.status || ""
+        });
+
+        setLookupDone(true);
+        return;
+      }
+    } catch (err) {
+      // A "not found" doc can surface as a permission error from the
+      // security rules (resource is null when the doc doesn't exist) —
+      // that's expected here, so just fall through to the archive check.
+      console.warn("Live case lookup failed, checking archive instead:", err);
+    }
+
+    // Not found (or wasn't readable) in the live collection — check archive.
+    try {
+      const q = query(
+        collection(db, "archive"),
+        where("originalCaseId", "==", caseId),
+        where("userId", "==", uid)
+      );
+      const snap = await getDocs(q);
+
+      if (!snap.empty) {
+        const d = snap.docs[0];
+        const data = d.data();
+        setArchivedDoc({ id: d.id, ...data });
+        setCaseData(null);
+        fetchClientName(uid, data.client_id);
+      } else {
+        setArchivedDoc(null);
+        setCaseData(null);
+      }
+    } catch (err) {
+      console.error("Archive lookup failed:", err);
+      setArchivedDoc(null);
+      setCaseData(null);
+    }
+
+    setLookupDone(true);
+  };
+
+  /* ================= RESTORE / PERMANENT DELETE (archived view) ================= */
+  const restoreThisCase = async () => {
+    if (!archivedDoc || !userId) return;
+
+    const { id: archiveDocId, originalCaseId, archivedAt, ...cleanData } = archivedDoc;
+    const restoredId = originalCaseId || caseId;
+
+    await setDoc(doc(db, "cases", restoredId), {
+      ...cleanData,
+      status: "Open",
+      restoredAt: Date.now()
+    });
+
+    await deleteDoc(doc(db, "archive", archiveDocId));
+
+    alert("Case restored");
+    fetchCase(userId);
+  };
+
+  const permanentlyDeleteThisCase = async () => {
+    if (!archivedDoc || !userId) return;
+
+    if (!window.confirm("Permanently delete this archived case and all its hearings, notes, and files? This cannot be undone.")) return;
+
+    try {
+      await cascadeDeleteArchivedCase({
+        archiveDocId: archivedDoc.id,
+        originalCaseId: archivedDoc.originalCaseId,
+        ownerId: userId
+      });
+      navigate("/archive");
+    } catch (err) {
+      console.error(err);
+      alert("Something went wrong deleting this case. Please try again.");
+    }
   };
 
   /* ================= HEARINGS ================= */
@@ -187,6 +279,7 @@ function CaseDetails() {
     };
 
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caseId, userId, isLawyer]);
 
   /* ================= UPDATE CASE (ARCHIVE ON CLOSE) ================= */
@@ -213,6 +306,7 @@ function CaseDetails() {
         await deleteDoc(caseRef);
 
         alert("Case moved to Archive");
+        fetchCase(userId);
         return;
       }
 
@@ -417,8 +511,88 @@ function CaseDetails() {
     (a, b) => new Date(a.date) - new Date(b.date)
   );
 
-  if (!caseData) return <PageContainer title="Case Dashboard"><p style={emptyText}>Loading…</p></PageContainer>;
+  /* ================= RENDER STATES ================= */
 
+  if (!lookupDone) {
+    return <PageContainer title="Case Dashboard"><p style={emptyText}>Loading…</p></PageContainer>;
+  }
+
+  // ARCHIVED — read-only summary view with Restore / Permanently Delete
+  if (archivedDoc) {
+    return (
+      <PageContainer
+        eyebrow={courtType?.toUpperCase()}
+        title={archivedDoc.title || "Archived Case"}
+        subtitle={clientName ? `Client: ${clientName}` : undefined}
+        action={
+          <a href={CMS_URL} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
+            <Button variant="secondary">Open in CMS ↗</Button>
+          </a>
+        }
+      >
+        <button onClick={() => navigate("/archive")} className="am-btn" style={backBtn}>
+          ← Back to Archive
+        </button>
+
+        <Card style={{ maxWidth: 520 }}>
+          <Badge tone="neutral">Archived</Badge>
+
+          <h3 style={overviewTitle}>{archivedDoc.title}</h3>
+
+          <div style={overviewRow}>
+            <span style={overviewLabel}>Status</span>
+            <span style={overviewValue}>{archivedDoc.status || "Closed"}</span>
+          </div>
+
+          <div style={overviewRow}>
+            <span style={overviewLabel}>Court</span>
+            <span style={overviewValue}>{(archivedDoc.court_type || "").toUpperCase()}</span>
+          </div>
+
+          <div style={overviewRow}>
+            <span style={overviewLabel}>Client</span>
+            <span style={overviewValue}>{clientName || "—"}</span>
+          </div>
+
+          <div style={overviewRow}>
+            <span style={overviewLabel}>Archived</span>
+            <span style={overviewValue}>
+              {archivedDoc.archivedAt ? new Date(archivedDoc.archivedAt).toLocaleDateString() : "—"}
+            </span>
+          </div>
+
+          {archivedDoc.description && (
+            <div style={{ ...overviewRow, flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+              <span style={overviewLabel}>Description</span>
+              <span style={{ ...overviewValue, fontWeight: 400 }}>{archivedDoc.description}</span>
+            </div>
+          )}
+
+          {canDelete && (
+            <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+              <Button onClick={restoreThisCase} style={{ flex: 1 }}>
+                Restore
+              </Button>
+              <Button variant="danger" onClick={permanentlyDeleteThisCase} style={{ flex: 1 }}>
+                Delete Permanently
+              </Button>
+            </div>
+          )}
+        </Card>
+      </PageContainer>
+    );
+  }
+
+  // NOT FOUND ANYWHERE
+  if (!caseData) {
+    return (
+      <PageContainer title="Case Dashboard">
+        <p style={emptyText}>Case not found or not accessible.</p>
+      </PageContainer>
+    );
+  }
+
+  // ACTIVE — normal full tabbed view
   return (
     <PageContainer
       eyebrow={courtType?.toUpperCase()}
@@ -785,7 +959,40 @@ const backBtn = {
   fontSize: "13px",
   fontWeight: 600,
   padding: "4px 0",
-  marginBottom: 6,
+  marginBottom: 18,
+  display: "inline-block",
+};
+
+const overviewTitle = {
+  fontFamily: font.display,
+  fontSize: "18px",
+  fontWeight: 600,
+  color: colors.ink,
+  margin: "12px 0 18px",
+};
+
+const overviewRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  padding: "10px 0",
+  borderTop: `1px solid ${colors.hairline}`,
+};
+
+const overviewLabel = {
+  fontSize: "12px",
+  fontWeight: 700,
+  letterSpacing: "0.04em",
+  textTransform: "uppercase",
+  color: colors.slate,
+};
+
+const overviewValue = {
+  fontFamily: font.display,
+  fontSize: "14px",
+  fontWeight: 600,
+  color: colors.ink,
+  textAlign: "right",
 };
 
 const itemTitle = {
