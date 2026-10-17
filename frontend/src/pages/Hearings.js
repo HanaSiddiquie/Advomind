@@ -11,18 +11,19 @@ import {
 } from "firebase/firestore";
 import { colors, font, radius } from "../styles/theme";
 import PageContainer from "../components/ui/PageContainer";
-import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
-import { CMS_URL } from "../services/cms";
+import Modal from "../components/ui/Modal";
 import { useAuthRole } from "../context/AuthRoleContext";
 import { fetchScoped } from "../services/scopedQuery";
+import { CMS_URL } from "../services/cms";
 
 function Hearings() {
   const [hearings, setHearings] = useState([]);
   const [cases, setCases] = useState([]);
   const [clients, setClients] = useState([]);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const { ownerId: userId, user, isLawyer } = useAuthRole();
   const courtType = localStorage.getItem("court");
@@ -51,7 +52,7 @@ function Hearings() {
       setCases(caseList);
       setHearings(hearingList);
 
-      // ✅ clients live under users/{uid}/clients, not a top-level collection
+      // clients live under users/{uid}/clients, not a top-level collection
       const clientSnap = await getDocs(
         query(
           collection(db, "users", userId, "clients"),
@@ -68,6 +69,7 @@ function Hearings() {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courtType, userId, isLawyer]);
 
   // ================= MAPS =================
@@ -85,7 +87,11 @@ function Hearings() {
 
   // ================= ADD HEARING =================
   const handleSubmit = async () => {
-    if (!form.case_id || !form.date || !form.event || !userId) return;
+    if (!form.case_id || !form.date || !form.event.trim()) {
+      alert("Please select a case, a date, and an event");
+      return;
+    }
+    if (!userId) return;
 
     await addDoc(collection(db, "hearings"), {
       case_id: form.case_id,
@@ -99,6 +105,7 @@ function Hearings() {
     });
 
     setForm({ case_id: "", date: "", event: "", notes: "" });
+    setShowAddModal(false);
     fetchData();
   };
 
@@ -123,14 +130,26 @@ function Hearings() {
       title="Hearings Timeline"
       subtitle="Schedule and track upcoming hearings"
       action={
-        <a href={CMS_URL} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
-          <Button variant="secondary">Open CMS ↗</Button>
-        </a>
+        <div style={{ display: "flex", gap: 10 }}>
+          <Button onClick={() => setShowAddModal(true)}>+ Add Hearing</Button>
+          <a href={CMS_URL} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
+            <Button variant="secondary">Open CMS ↗</Button>
+          </a>
+        </div>
       }
     >
-      {/* FORM */}
-      <Card style={{ marginBottom: 25 }}>
-        <h3 style={cardTitle}>Add Hearing</h3>
+      {/* ADD HEARING MODAL */}
+      <Modal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="Add Hearing"
+      >
+        {cases.length === 0 && (
+          <p style={modalHint}>
+            You don't have any cases on this court yet — create a case first, then come back
+            to schedule its hearings.
+          </p>
+        )}
 
         <label style={selectLabel}>Case</label>
         <select
@@ -170,15 +189,18 @@ function Hearings() {
           onChange={(e) => setForm({ ...form, notes: e.target.value })}
         />
 
-        <Button onClick={handleSubmit} full>
-          Add Hearing
-        </Button>
-      </Card>
+        <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+          <Button onClick={handleSubmit} style={{ flex: 1 }}>Add Hearing</Button>
+          <Button variant="secondary" onClick={() => setShowAddModal(false)} style={{ flex: 1 }}>
+            Cancel
+          </Button>
+        </div>
+      </Modal>
 
       {/* TIMELINE */}
       <div style={timeline}>
         {sortedHearings.length === 0 ? (
-          <p style={emptyText}>No hearings scheduled</p>
+          <p style={emptyText}>No hearings scheduled yet — click "+ Add Hearing" above to schedule one.</p>
         ) : (
           sortedHearings.map(h => (
             <div
@@ -204,14 +226,6 @@ function Hearings() {
 }
 
 /* ================= STYLES ================= */
-
-const cardTitle = {
-  fontFamily: font.display,
-  fontSize: "16px",
-  fontWeight: 600,
-  color: colors.ink,
-  margin: "0 0 16px",
-};
 
 const selectLabel = {
   display: "block",
@@ -244,6 +258,17 @@ const textareaStyle = {
   resize: "vertical",
 };
 
+const modalHint = {
+  fontSize: "13px",
+  color: colors.slate,
+  background: colors.paper,
+  border: `1px solid ${colors.hairline}`,
+  borderRadius: radius.sm,
+  padding: "10px 12px",
+  marginBottom: 16,
+  lineHeight: 1.45,
+};
+
 const timeline = {
   display: "flex",
   flexDirection: "column",
@@ -254,7 +279,6 @@ const card = {
   background: colors.surface,
   padding: "16px 18px",
   borderRadius: radius.md,
-  borderLeft: `4px solid ${colors.accent}`,
   border: `1px solid ${colors.hairline}`,
   borderLeftWidth: "4px",
   borderLeftColor: colors.accent,

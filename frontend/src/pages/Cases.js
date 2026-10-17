@@ -18,16 +18,18 @@ import PageContainer from "../components/ui/PageContainer";
 import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
-import { CMS_URL } from "../services/cms";
 import Badge from "../components/ui/Badge";
+import Modal from "../components/ui/Modal";
 import { useAuthRole } from "../context/AuthRoleContext";
 import { fetchScoped } from "../services/scopedQuery";
 import { cascadeDeleteCase, cascadeDeleteArchivedCase } from "../services/cascadeDelete";
+import { CMS_URL } from "../services/cms";
 
 function Cases() {
   const [cases, setCases] = useState({ active: [], archived: [] });
   const [clients, setClients] = useState([]);
   const [secretaries, setSecretaries] = useState([]);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const { ownerId: userId, user, isLawyer, canDelete } = useAuthRole();
   const court = localStorage.getItem("court");
@@ -83,6 +85,7 @@ function Cases() {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, court, isLawyer]);
 
   // ================= ADD =================
@@ -105,6 +108,7 @@ function Cases() {
     });
 
     setForm({ client_id: "", title: "", description: "", assignedTo: "" });
+    setShowAddModal(false);
     fetchData();
   };
 
@@ -116,9 +120,9 @@ function Cases() {
     fetchData();
   };
 
-  // ================= DELETE (cascades to hearings, notes, files) =================
+  // ================= DELETE (cascades to hearings, notes, files, billing) =================
   const handleDelete = async (id) => {
-    if (!window.confirm("Delete this case? This also permanently deletes its hearings, notes, and files.")) return;
+    if (!window.confirm("Delete this case? This also permanently deletes its hearings, notes, files, and billing records.")) return;
 
     try {
       await cascadeDeleteCase({ caseId: id, ownerId: userId });
@@ -171,7 +175,7 @@ function Cases() {
 
   // ================= PERMANENTLY DELETE ARCHIVED CASE =================
   const permanentlyDeleteArchived = async (caseItem) => {
-    if (!window.confirm("Permanently delete this archived case and all its hearings, notes, and files? This cannot be undone.")) return;
+    if (!window.confirm("Permanently delete this archived case and all its hearings, notes, files, and billing records? This cannot be undone.")) return;
 
     try {
       await cascadeDeleteArchivedCase({
@@ -192,14 +196,26 @@ function Cases() {
       title="Cases"
       subtitle="Manage active case files and view your archive"
       action={
-        <a href={CMS_URL} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
-          <Button variant="secondary">Open CMS ↗</Button>
-        </a>
+        <div style={{ display: "flex", gap: 10 }}>
+          <Button onClick={() => setShowAddModal(true)}>+ Add Case</Button>
+          <a href={CMS_URL} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
+            <Button variant="secondary">Open CMS ↗</Button>
+          </a>
+        </div>
       }
     >
-      {/* FORM */}
-      <Card style={{ marginBottom: 28 }}>
-        <h3 style={sectionTitle}>Add New Case</h3>
+      {/* ADD CASE MODAL */}
+      <Modal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="Add New Case"
+      >
+        {clients.length === 0 && (
+          <p style={modalHint}>
+            You don't have any clients on this court yet — add a client from the Clients page first,
+            then come back to create a case for them.
+          </p>
+        )}
 
         <label style={selectLabel}>Client</label>
         <select
@@ -254,15 +270,20 @@ function Cases() {
           </>
         )}
 
-        <Button onClick={handleSubmit} full>Add Case</Button>
-      </Card>
+        <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+          <Button onClick={handleSubmit} style={{ flex: 1 }}>Add Case</Button>
+          <Button variant="secondary" onClick={() => setShowAddModal(false)} style={{ flex: 1 }}>
+            Cancel
+          </Button>
+        </div>
+      </Modal>
 
       {/* ACTIVE */}
       <h3 style={groupTitle}>Active Cases</h3>
 
       <div style={grid}>
         {cases.active.length === 0 ? (
-          <p style={emptyText}>No active cases</p>
+          <p style={emptyText}>No active cases yet — click "+ Add Case" above to create one.</p>
         ) : (
           cases.active.map(c => (
             <Card key={c.id} hoverable style={caseCard}>
@@ -345,20 +366,12 @@ function Cases() {
 
 /* ================= STYLES ================= */
 
-const sectionTitle = {
-  fontFamily: font.display,
-  fontSize: "16px",
-  fontWeight: 600,
-  color: colors.ink,
-  margin: "0 0 16px",
-};
-
 const groupTitle = {
   fontFamily: font.display,
   fontSize: "15px",
   fontWeight: 600,
   color: colors.ink,
-  margin: "28px 0 14px",
+  margin: "8px 0 14px",
 };
 
 const selectLabel = {
@@ -393,10 +406,22 @@ const textareaStyle = {
   fontFamily: font.body,
 };
 
+const modalHint = {
+  fontSize: "13px",
+  color: colors.slate,
+  background: colors.paper,
+  border: `1px solid ${colors.hairline}`,
+  borderRadius: radius.sm,
+  padding: "10px 12px",
+  marginBottom: 16,
+  lineHeight: 1.45,
+};
+
 const grid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
   gap: 14,
+  marginBottom: 20,
 };
 
 const caseCard = {

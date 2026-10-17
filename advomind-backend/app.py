@@ -3,16 +3,20 @@ from flask import Flask
 from flask_cors import CORS
 import os
 from dotenv import load_dotenv
+from ocr_routes import ocr_bp
 
 load_dotenv()  # reads .env in this folder into os.environ
 
 from admin_routes import admin_bp
+from ai_routes import ai_bp
 from notifications import check_and_send_reminders
 from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__)
 CORS(app)
 app.register_blueprint(admin_bp)
+app.register_blueprint(ai_bp)
+app.register_blueprint(ocr_bp)
 
 # Flask's debug reloader spawns a child process that re-imports this module,
 # which would start a second scheduler instance. WERKZEUG_RUN_MAIN is only

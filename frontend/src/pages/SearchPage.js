@@ -82,7 +82,7 @@ function SearchPage() {
 
   const matchedFiles = useMemo(() => {
     if (!q) return [];
-    return files.filter(f => includesTerm(f.name, q));
+    return files.filter(f => includesTerm(f.name, q) || includesTerm(f.extractedText, q));
   }, [files, q]);
 
   const totalResults = matchedClients.length + matchedCases.length + matchedHearings.length + matchedFiles.length;

@@ -14,6 +14,7 @@ import PageContainer from "../components/ui/PageContainer";
 import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
+import Modal from "../components/ui/Modal";
 import { useAuthRole } from "../context/AuthRoleContext";
 import { cascadeDeleteClient } from "../services/cascadeDelete";
 
@@ -21,6 +22,7 @@ function Clients() {
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState("");
   const [deletingId, setDeletingId] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
   const { ownerId: userId, user, canDelete } = useAuthRole();
 
   const navigate = useNavigate();
@@ -48,11 +50,16 @@ function Clients() {
 
   useEffect(() => {
     fetchClients();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, court]);
 
   // ================= ADD =================
   const handleSubmit = async () => {
-    if (!form.name || !form.cnic || !userId) return;
+    if (!form.name.trim() || !form.cnic.trim()) {
+      alert("Name and CNIC are required");
+      return;
+    }
+    if (!userId) return;
 
     await addDoc(
       collection(db, "users", userId, "clients"),
@@ -64,14 +71,15 @@ function Clients() {
     );
 
     setForm({ name: "", cnic: "", phone: "" });
+    setShowAddModal(false);
     fetchClients();
   };
 
-  // ================= DELETE (cascades to cases, hearings, notes, files) =================
+  // ================= DELETE (cascades to cases, hearings, notes, files, billing) =================
   const handleDelete = async (id, name) => {
     const confirmed = window.confirm(
       `Delete ${name || "this client"}? This will also permanently delete every case, hearing, ` +
-      `note, and file attached to them (active and archived). This cannot be undone.`
+      `note, file, and billing record attached to them (active and archived). This cannot be undone.`
     );
     if (!confirmed) return;
 
@@ -104,38 +112,42 @@ function Clients() {
       eyebrow={court?.toUpperCase()}
       title="Clients"
       subtitle="Manage client records for this court"
+      action={<Button onClick={() => setShowAddModal(true)}>+ Add Client</Button>}
     >
-      {/* FORM */}
-      <Card style={{ marginBottom: 20 }}>
-        <h3 style={cardTitle}>Add Client</h3>
+      {/* ADD CLIENT MODAL */}
+      <Modal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="Add Client"
+      >
+        <Input
+          placeholder="Full name"
+          label="Name"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+        />
 
-        <div style={formRow}>
-          <Input
-            placeholder="Full name"
-            label="Name"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
+        <Input
+          placeholder="42101-1234567-1"
+          label="CNIC"
+          value={form.cnic}
+          onChange={(e) => setForm({ ...form, cnic: e.target.value })}
+        />
 
-          <Input
-            placeholder="42101-1234567-1"
-            label="CNIC"
-            value={form.cnic}
-            onChange={(e) => setForm({ ...form, cnic: e.target.value })}
-          />
+        <Input
+          placeholder="03xx-xxxxxxx"
+          label="Phone"
+          value={form.phone}
+          onChange={(e) => setForm({ ...form, phone: e.target.value })}
+        />
 
-          <Input
-            placeholder="03xx-xxxxxxx"
-            label="Phone"
-            value={form.phone}
-            onChange={(e) => setForm({ ...form, phone: e.target.value })}
-          />
+        <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+          <Button onClick={handleSubmit} style={{ flex: 1 }}>Add Client</Button>
+          <Button variant="secondary" onClick={() => setShowAddModal(false)} style={{ flex: 1 }}>
+            Cancel
+          </Button>
         </div>
-
-        <Button onClick={handleSubmit} full>
-          Add Client
-        </Button>
-      </Card>
+      </Modal>
 
       {/* SEARCH */}
       <Input
@@ -147,8 +159,10 @@ function Clients() {
 
       {/* LIST */}
       <div style={grid}>
-        {filteredClients.length === 0 ? (
-          <p style={emptyText}>No clients found</p>
+        {clients.length === 0 ? (
+          <p style={emptyText}>No clients yet — click "+ Add Client" above to create one.</p>
+        ) : filteredClients.length === 0 ? (
+          <p style={emptyText}>No clients match your search</p>
         ) : (
           filteredClients.map(c => (
             <Card
@@ -187,20 +201,6 @@ function Clients() {
 }
 
 /* ================= STYLES ================= */
-
-const cardTitle = {
-  fontFamily: font.display,
-  fontSize: "16px",
-  fontWeight: 600,
-  color: colors.ink,
-  margin: "0 0 16px",
-};
-
-const formRow = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-  gap: "0 14px",
-};
 
 const grid = {
   display: "grid",

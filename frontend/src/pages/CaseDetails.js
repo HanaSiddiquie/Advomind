@@ -1,5 +1,5 @@
 // frontend/src/pages/CaseDetails.js
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   doc,
@@ -28,11 +28,15 @@ import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
+import { summarizeCase } from "../services/aiApi";
 import { useAuthRole } from "../context/AuthRoleContext";
 import { CMS_URL } from "../services/cms";
 import { cascadeDeleteArchivedCase } from "../services/cascadeDelete";
+import { computeItemAmount, computeTotals, formatCurrency } from "../services/billing";
+import Modal from "../components/ui/Modal";
+import { extractFileText } from "../services/ocrApi";
 
-const TABS = ["view", "details", "diary", "hearings", "files"];
+const TABS = ["view", "summary", "details", "diary", "hearings", "billing", "files"];
 
 function CaseDetails() {
   const { id } = useParams();
@@ -47,15 +51,18 @@ function CaseDetails() {
   const [hearings, setHearings] = useState([]);
   const [files, setFiles] = useState([]);
   const [secretaries, setSecretaries] = useState([]);
+  const [generatingSummary, setGeneratingSummary] = useState(false);
 
-  // ================= ARCHIVED-CASE FALLBACK =================
-  // If a case has been archived, its doc under "cases" is gone — this page
-  // needs to fall back to the "archive" collection instead of erroring.
+  // Archived-case fallback: if a case was archived, its "cases" doc is
+  // deleted, so this page needs to fall back to the "archive" collection.
   const [archivedDoc, setArchivedDoc] = useState(null);
   const [lookupDone, setLookupDone] = useState(false);
 
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+
+  const [extractingFileId, setExtractingFileId] = useState(null);
+  const [viewingFile, setViewingFile] = useState(null);
 
   const [tab, setTab] = useState("view");
 
@@ -66,7 +73,7 @@ function CaseDetails() {
   });
 
   const [diaryNotes, setDiaryNotes] = useState([]);
-  const [activeNoteId, setActiveNoteId] = useState(null); // null = list view, "new" = creating, or a note id
+  const [activeNoteId, setActiveNoteId] = useState(null);
   const [noteForm, setNoteForm] = useState({ title: "", body: "" });
 
   const [detailNotes, setDetailNotes] = useState([]);
@@ -76,6 +83,23 @@ function CaseDetails() {
   const [hearingForm, setHearingForm] = useState({
     date: "",
     event: "",
+    notes: ""
+  });
+
+  const [billingItems, setBillingItems] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [billingForm, setBillingForm] = useState({
+    type: "fee",
+    description: "",
+    amount: "",
+    hours: "",
+    rate: "",
+    date: ""
+  });
+  const [paymentForm, setPaymentForm] = useState({
+    amount: "",
+    method: "Cash",
+    date: "",
     notes: ""
   });
 
@@ -120,13 +144,9 @@ function CaseDetails() {
         return;
       }
     } catch (err) {
-      // A "not found" doc can surface as a permission error from the
-      // security rules (resource is null when the doc doesn't exist) —
-      // that's expected here, so just fall through to the archive check.
       console.warn("Live case lookup failed, checking archive instead:", err);
     }
 
-    // Not found (or wasn't readable) in the live collection — check archive.
     try {
       const q = query(
         collection(db, "archive"),
@@ -153,6 +173,22 @@ function CaseDetails() {
 
     setLookupDone(true);
   };
+
+  const generateSummary = async () => {
+  setGeneratingSummary(true);
+  try {
+    const result = await summarizeCase(caseId);
+    setCaseData(prev => ({
+      ...prev,
+      aiSummary: { text: result.summary, generatedAt: result.generatedAt }
+    }));
+  } catch (err) {
+    console.error(err);
+    alert(err.message || "Failed to generate summary");
+  } finally {
+    setGeneratingSummary(false);
+  }
+};
 
   /* ================= RESTORE / PERMANENT DELETE (archived view) ================= */
   const restoreThisCase = async () => {
@@ -227,10 +263,8 @@ function CaseDetails() {
     );
 
     const snap = await getDocs(q);
-
     const notes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     notes.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-
     setDiaryNotes(notes);
   };
 
@@ -244,11 +278,38 @@ function CaseDetails() {
     );
 
     const snap = await getDocs(q);
-
     const notes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     notes.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-
     setDetailNotes(notes);
+  };
+
+  /* ================= BILLING ================= */
+  const fetchBillingItems = async (uid) => {
+    const q = query(
+      collection(db, "billingItems"),
+      where("case_id", "==", caseId),
+      where("userId", "==", uid),
+      where("court_type", "==", courtType)
+    );
+
+    const snap = await getDocs(q);
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    setBillingItems(items);
+  };
+
+  const fetchPayments = async (uid) => {
+    const q = query(
+      collection(db, "payments"),
+      where("case_id", "==", caseId),
+      where("userId", "==", uid),
+      where("court_type", "==", courtType)
+    );
+
+    const snap = await getDocs(q);
+    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    setPayments(list);
   };
 
   /* ================= SECRETARIES (for Assign To picker, lawyer only) ================= */
@@ -275,6 +336,8 @@ function CaseDetails() {
       await fetchFiles(userId);
       await fetchDiaryNotes(userId);
       await fetchDetailNotes(userId);
+      await fetchBillingItems(userId);
+      await fetchPayments(userId);
       await fetchSecretaries(userId);
     };
 
@@ -343,6 +406,111 @@ function CaseDetails() {
     setHearingForm({ date: "", event: "", notes: "" });
     fetchHearings(userId);
   };
+
+  /* ================= BILLING HANDLERS ================= */
+  const addBillingItem = async () => {
+    if (!billingForm.description.trim()) {
+      alert("Give this billing item a description");
+      return;
+    }
+
+    if (billingForm.type === "time" && (!billingForm.hours || !billingForm.rate)) {
+      alert("Enter both hours and rate for a time entry");
+      return;
+    }
+
+    if (billingForm.type !== "time" && !billingForm.amount) {
+      alert("Enter an amount");
+      return;
+    }
+
+    await addDoc(collection(db, "billingItems"), {
+      case_id: caseId,
+      userId,
+      court_type: courtType,
+      createdBy: currentUser.uid,
+      assignedTo: caseData?.assignedTo || null,
+      type: billingForm.type,
+      description: billingForm.description,
+      amount: billingForm.type === "time" ? null : Number(billingForm.amount) || 0,
+      hours: billingForm.type === "time" ? Number(billingForm.hours) || 0 : null,
+      rate: billingForm.type === "time" ? Number(billingForm.rate) || 0 : null,
+      date: billingForm.date || new Date().toISOString().slice(0, 10),
+      createdAt: Date.now()
+    });
+
+    setBillingForm({ type: "fee", description: "", amount: "", hours: "", rate: "", date: "" });
+    fetchBillingItems(userId);
+  };
+
+  const deleteBillingItem = async (itemId) => {
+    if (!window.confirm("Delete this billing item?")) return;
+    await deleteDoc(doc(db, "billingItems", itemId));
+    fetchBillingItems(userId);
+  };
+
+  const addPayment = async () => {
+    if (!paymentForm.amount || Number(paymentForm.amount) <= 0) {
+      alert("Enter a payment amount");
+      return;
+    }
+
+    await addDoc(collection(db, "payments"), {
+      case_id: caseId,
+      client_id: caseData?.client_id || null,
+      userId,
+      court_type: courtType,
+      createdBy: currentUser.uid,
+      assignedTo: caseData?.assignedTo || null,
+      amount: Number(paymentForm.amount),
+      method: paymentForm.method,
+      date: paymentForm.date || new Date().toISOString().slice(0, 10),
+      notes: paymentForm.notes,
+      createdAt: Date.now()
+    });
+
+    setPaymentForm({ amount: "", method: "Cash", date: "", notes: "" });
+    fetchPayments(userId);
+  };
+
+  const deletePayment = async (paymentId) => {
+    if (!window.confirm("Delete this payment record?")) return;
+    await deleteDoc(doc(db, "payments", paymentId));
+    fetchPayments(userId);
+  };
+
+  const billingTotals = useMemo(
+    () => computeTotals(billingItems, payments),
+    [billingItems, payments]
+  );
+
+  const printStatement = () => {
+  const content = document.getElementById("print-area").innerHTML;
+  const printWindow = window.open("", "_blank", "width=800,height=900");
+
+  printWindow.document.write(`
+    <html>
+      <head>
+        <title>Statement — ${caseData.title}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 32px; color: #1A1A1D; }
+          h2, h3 { font-family: Georgia, serif; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+          th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; font-size: 13px; }
+          th { background: #F7F7F5; }
+          hr { border: none; border-top: 1px solid #ddd; margin: 20px 0; }
+        </style>
+      </head>
+      <body>${content}</body>
+    </html>
+  `);
+
+  printWindow.document.close();
+  printWindow.onload = () => {
+    printWindow.focus();
+    printWindow.print();
+  };
+};
 
   /* ================= DIARY NOTE HANDLERS ================= */
   const openNote = (note) => {
@@ -491,7 +659,7 @@ function CaseDetails() {
     }
   };
 
-  /* ================= DELETE FILE (gated by canDelete — matches Firestore rules) ================= */
+  /* ================= DELETE FILE ================= */
   const deleteFile = async (f) => {
     try {
       if (f.storagePath) {
@@ -507,6 +675,30 @@ function CaseDetails() {
     }
   };
 
+  const canExtractText = (f) => /\.(pdf|png|jpe?g|tiff?|bmp|webp)$/i.test(f.name || "");
+
+const runExtraction = async (f, forceOcr = false) => {
+  setExtractingFileId(f.id);
+  try {
+    const result = await extractFileText(f.id, forceOcr);
+    await fetchFiles(userId);
+    if (result.warnings && result.warnings.length > 0) {
+      alert("Text extracted, but please note:\n\n" + result.warnings.join("\n\n"));
+    }
+  } catch (err) {
+    console.error(err);
+    alert(err.message || "Text extraction failed");
+  } finally {
+    setExtractingFileId(null);
+  }
+};
+
+const ocrSummary = (f) => {
+  if (f.ocrMethod === "text-layer") return "Text layer";
+  if (typeof f.ocrConfidence === "number") return `OCR · ${Math.round(f.ocrConfidence)}%`;
+  return "OCR";
+};
+
   const sortedHearings = [...hearings].sort(
     (a, b) => new Date(a.date) - new Date(b.date)
   );
@@ -517,7 +709,6 @@ function CaseDetails() {
     return <PageContainer title="Case Dashboard"><p style={emptyText}>Loading…</p></PageContainer>;
   }
 
-  // ARCHIVED — read-only summary view with Restore / Permanently Delete
   if (archivedDoc) {
     return (
       <PageContainer
@@ -583,7 +774,6 @@ function CaseDetails() {
     );
   }
 
-  // NOT FOUND ANYWHERE
   if (!caseData) {
     return (
       <PageContainer title="Case Dashboard">
@@ -592,7 +782,6 @@ function CaseDetails() {
     );
   }
 
-  // ACTIVE — normal full tabbed view
   return (
     <PageContainer
       eyebrow={courtType?.toUpperCase()}
@@ -672,6 +861,36 @@ function CaseDetails() {
           </div>
         )}
 
+{/* SUMMARY */}
+{tab === "summary" && (
+  <div style={section}>
+    <Button
+      onClick={generateSummary}
+      disabled={generatingSummary}
+      style={{ alignSelf: "flex-start", marginBottom: 14 }}
+    >
+      {generatingSummary ? "Generating…" : caseData.aiSummary ? "Regenerate Summary" : "Generate Summary"}
+    </Button>
+
+    {caseData.aiSummary ? (
+      <div style={summaryBox}>
+        <p style={summaryText}>{caseData.aiSummary.text}</p>
+        <p style={summaryMeta}>
+          Generated {new Date(caseData.aiSummary.generatedAt).toLocaleString()}
+        </p>
+      </div>
+    ) : (
+      <p style={emptyText}>
+        No summary yet — click "Generate Summary" to create one from this case's details, notes, and hearings.
+      </p>
+    )}
+
+    <p style={summaryDisclaimer}>
+      AI-generated from information already in Advomind. It doesn't yet reflect the contents
+      of uploaded files, and should be checked against your own knowledge of the case.
+    </p>
+  </div>
+)}
         {/* DETAILS */}
         {tab === "details" && (
           activeDetailNoteId === null ? (
@@ -840,6 +1059,225 @@ function CaseDetails() {
           </div>
         )}
 
+        {/* BILLING */}
+        {tab === "billing" && (
+          <div style={section}>
+
+            <div style={billingStatsRow}>
+              <div style={billingStat}>
+                <span style={billingStatLabel}>Total Billed</span>
+                <span style={billingStatValue}>{formatCurrency(billingTotals.billed)}</span>
+              </div>
+              <div style={billingStat}>
+                <span style={billingStatLabel}>Total Paid</span>
+                <span style={{ ...billingStatValue, color: colors.success }}>{formatCurrency(billingTotals.paid)}</span>
+              </div>
+              <div style={billingStat}>
+                <span style={billingStatLabel}>Balance Due</span>
+                <span style={{ ...billingStatValue, color: billingTotals.balance > 0 ? colors.danger : colors.success }}>
+                  {formatCurrency(billingTotals.balance)}
+                </span>
+              </div>
+            </div>
+
+            <Button onClick={printStatement} variant="secondary" style={{ alignSelf: "flex-start", marginBottom: 20 }}>
+              Print Statement
+            </Button>
+
+            <h4 style={billingSectionTitle}>Add Fee / Time / Expense</h4>
+
+            <label style={selectLabel}>Type</label>
+            <select
+              className="am-input"
+              value={billingForm.type}
+              onChange={(e) => setBillingForm({ ...billingForm, type: e.target.value })}
+              style={selectStyle}
+            >
+              <option value="fee">Flat Fee</option>
+              <option value="time">Time Entry (hours × rate)</option>
+              <option value="expense">Expense</option>
+            </select>
+
+            <Input
+              label="Description"
+              placeholder="e.g. Drafting reply, court filing fee, hearing appearance"
+              value={billingForm.description}
+              onChange={(e) => setBillingForm({ ...billingForm, description: e.target.value })}
+            />
+
+            {billingForm.type === "time" ? (
+              <div style={billingFormRow}>
+                <Input
+                  label="Hours"
+                  type="number"
+                  placeholder="0"
+                  value={billingForm.hours}
+                  onChange={(e) => setBillingForm({ ...billingForm, hours: e.target.value })}
+                />
+                <Input
+                  label="Rate (per hour)"
+                  type="number"
+                  placeholder="0"
+                  value={billingForm.rate}
+                  onChange={(e) => setBillingForm({ ...billingForm, rate: e.target.value })}
+                />
+              </div>
+            ) : (
+              <Input
+                label="Amount"
+                type="number"
+                placeholder="0"
+                value={billingForm.amount}
+                onChange={(e) => setBillingForm({ ...billingForm, amount: e.target.value })}
+              />
+            )}
+
+            <Input
+              label="Date"
+              type="date"
+              value={billingForm.date}
+              onChange={(e) => setBillingForm({ ...billingForm, date: e.target.value })}
+            />
+
+            <Button onClick={addBillingItem} style={{ alignSelf: "flex-start", marginBottom: 10 }}>
+              Add Item
+            </Button>
+
+            {billingItems.length === 0 ? (
+              <p style={emptyText}>No billing items yet</p>
+            ) : (
+              billingItems.map(i => (
+                <div key={i.id} style={billingRow}>
+                  <div>
+                    <Badge tone={i.type === "expense" ? "danger" : i.type === "time" ? "accent" : "dark"}>
+                      {i.type === "time" ? "Time" : i.type === "expense" ? "Expense" : "Fee"}
+                    </Badge>
+                    <div style={itemTitle}>{i.description}</div>
+                    <div style={itemMeta}>
+                      {i.type === "time" ? `${i.hours} hrs × ${formatCurrency(i.rate)}` : i.date}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={billingAmount}>{formatCurrency(computeItemAmount(i))}</span>
+                    {canDelete && (
+                      <button className="am-btn" onClick={() => deleteBillingItem(i.id)} style={smallDeleteLink}>
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+
+            <h4 style={billingSectionTitle}>Record Payment</h4>
+
+            <Input
+              label="Amount"
+              type="number"
+              placeholder="0"
+              value={paymentForm.amount}
+              onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+            />
+
+            <label style={selectLabel}>Method</label>
+            <select
+              className="am-input"
+              value={paymentForm.method}
+              onChange={(e) => setPaymentForm({ ...paymentForm, method: e.target.value })}
+              style={selectStyle}
+            >
+              <option>Cash</option>
+              <option>Bank Transfer</option>
+              <option>Cheque</option>
+              <option>Other</option>
+            </select>
+
+            <Input
+              label="Date"
+              type="date"
+              value={paymentForm.date}
+              onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })}
+            />
+
+            <label style={selectLabel}>Notes</label>
+            <textarea
+              className="am-input"
+              placeholder="Optional notes"
+              value={paymentForm.notes}
+              onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
+              style={textareaStyle}
+            />
+
+            <Button onClick={addPayment} style={{ alignSelf: "flex-start", marginBottom: 10 }}>
+              Record Payment
+            </Button>
+
+            {payments.length === 0 ? (
+              <p style={emptyText}>No payments recorded yet</p>
+            ) : (
+              payments.map(p => (
+                <div key={p.id} style={billingRow}>
+                  <div>
+                    <Badge tone="success">Payment</Badge>
+                    <div style={itemTitle}>{p.method}</div>
+                    <div style={itemMeta}>{p.date}{p.notes ? ` · ${p.notes}` : ""}</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ ...billingAmount, color: colors.success }}>{formatCurrency(p.amount)}</span>
+                    {canDelete && (
+                      <button className="am-btn" onClick={() => deletePayment(p.id)} style={smallDeleteLink}>
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+
+            {/* Printable statement — hidden on screen, shown via @media print */}
+            <div id="print-area" style={printStatementArea}>
+              <h2 style={{ fontFamily: font.display }}>{caseData.title}</h2>
+              <p>Client: {clientName || "—"}</p>
+              <p>Court: {(courtType || "").toUpperCase()}</p>
+              <hr />
+              <h3>Billing Items</h3>
+              <table style={printTable}>
+                <thead>
+                  <tr><th>Date</th><th>Description</th><th>Amount</th></tr>
+                </thead>
+                <tbody>
+                  {billingItems.map(i => (
+                    <tr key={i.id}>
+                      <td>{i.date}</td>
+                      <td>{i.description}</td>
+                      <td>{formatCurrency(computeItemAmount(i))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <h3>Payments</h3>
+              <table style={printTable}>
+                <thead>
+                  <tr><th>Date</th><th>Method</th><th>Amount</th></tr>
+                </thead>
+                <tbody>
+                  {payments.map(p => (
+                    <tr key={p.id}>
+                      <td>{p.date}</td>
+                      <td>{p.method}</td>
+                      <td>{formatCurrency(p.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <hr />
+              <p><strong>Total Billed: {formatCurrency(billingTotals.billed)}</strong></p>
+              <p><strong>Total Paid: {formatCurrency(billingTotals.paid)}</strong></p>
+              <p><strong>Balance Due: {formatCurrency(billingTotals.balance)}</strong></p>
+            </div>
+          </div>
+        )}
+
         {/* FILES */}
         {tab === "files" && (
           <div style={section}>
@@ -850,13 +1288,69 @@ function CaseDetails() {
             </Button>
 
             {files.map(f => (
-              <div key={f.id} style={{ ...item, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <a href={f.url} target="_blank" rel="noreferrer" style={fileLink}>
-                  {f.name}
-                </a>
-                {canDelete && <Button variant="danger" onClick={() => deleteFile(f)}>Delete</Button>}
-              </div>
-            ))}
+  <div key={f.id} style={item}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+      <a href={f.url} target="_blank" rel="noreferrer" style={fileLink}>
+        {f.name}
+      </a>
+      {canDelete && <Button variant="danger" onClick={() => deleteFile(f)}>Delete</Button>}
+    </div>
+
+    {canExtractText(f) && (
+      <div style={fileActions}>
+        {f.extractedText ? (
+          <>
+            <Badge tone={(f.ocrWarnings || []).length > 0 ? "danger" : "success"}>
+              {ocrSummary(f)}
+            </Badge>
+            <Button variant="secondary" onClick={() => setViewingFile(f)}>View Text</Button>
+            <Button
+              variant="ghost"
+              onClick={() => runExtraction(f, true)}
+              disabled={extractingFileId === f.id}
+            >
+              {extractingFileId === f.id ? "Running OCR…" : "Re-run OCR"}
+            </Button>
+          </>
+        ) : (
+          <Button
+            variant="secondary"
+            onClick={() => runExtraction(f)}
+            disabled={extractingFileId === f.id}
+          >
+            {extractingFileId === f.id ? "Extracting… (scanned files can take a minute)" : "Extract Text"}
+          </Button>
+        )}
+      </div>
+    )}
+  </div>
+))}
+
+<Modal
+  open={!!viewingFile}
+  onClose={() => setViewingFile(null)}
+  title={viewingFile ? viewingFile.name : ""}
+  maxWidth={760}
+>
+  {viewingFile && (
+    <>
+      <div style={ocrMeta}>
+        {ocrSummary(viewingFile)} · {viewingFile.ocrPages} page(s)
+        {viewingFile.extractedAt ? ` · extracted ${new Date(viewingFile.extractedAt).toLocaleString()}` : ""}
+      </div>
+
+      {(viewingFile.ocrWarnings || []).map((w, i) => (
+        <div key={i} style={ocrWarningBox}>{w}</div>
+      ))}
+
+      <div dir="auto" style={textViewer}>{viewingFile.extractedText}</div>
+
+      <p style={ocrDisclaimer}>
+        Machine-extracted text. Check it against the original before relying on it.
+      </p>
+    </>
+  )}
+</Modal>
           </div>
         )}
 
@@ -1019,5 +1513,149 @@ const emptyText = {
   color: colors.slate,
   fontSize: "13px",
 };
+
+const billingStatsRow = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, 1fr)",
+  gap: 12,
+  marginBottom: 18,
+};
+
+const billingStat = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+  padding: "14px 16px",
+  border: `1px solid ${colors.hairline}`,
+  borderRadius: radius.md,
+  background: colors.paper,
+};
+
+const billingStatLabel = {
+  fontSize: "11px",
+  fontWeight: 700,
+  letterSpacing: "0.04em",
+  textTransform: "uppercase",
+  color: colors.slate,
+};
+
+const billingStatValue = {
+  fontFamily: font.display,
+  fontSize: "18px",
+  fontWeight: 600,
+  color: colors.ink,
+};
+
+const billingSectionTitle = {
+  fontFamily: font.display,
+  fontSize: "14px",
+  fontWeight: 600,
+  color: colors.ink,
+  margin: "22px 0 12px",
+  borderTop: `1px solid ${colors.hairline}`,
+  paddingTop: 18,
+};
+
+const billingFormRow = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "0 14px",
+};
+
+const billingRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  padding: "10px 14px",
+  border: `1px solid ${colors.hairline}`,
+  borderRadius: radius.sm,
+  marginTop: 8,
+  background: colors.surface,
+};
+
+const billingAmount = {
+  fontFamily: font.display,
+  fontWeight: 700,
+  fontSize: "14px",
+  color: colors.ink,
+};
+
+const smallDeleteLink = {
+  background: "transparent",
+  border: "none",
+  color: colors.danger,
+  fontSize: "11px",
+  fontWeight: 700,
+  padding: 0,
+};
+
+const printStatementArea = {
+  display: "none",
+};
+
+const printTable = {
+  width: "100%",
+  borderCollapse: "collapse",
+};
+
+const summaryBox = {
+  padding: "16px 18px",
+  border: `1px solid ${colors.hairline}`,
+  borderRadius: radius.md,
+  background: colors.paper,
+  marginBottom: 14,
+};
+
+const summaryText = {
+  fontSize: "14px",
+  color: colors.charcoal,
+  lineHeight: 1.6,
+  margin: 0,
+};
+
+const summaryMeta = {
+  fontSize: "11px",
+  color: colors.slate,
+  marginTop: 10,
+  marginBottom: 0,
+};
+
+const summaryDisclaimer = {
+  fontSize: "11px",
+  color: colors.slate,
+  fontStyle: "italic",
+  marginTop: 10,
+};
+
+const fileActions = { display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" };
+
+const ocrMeta = { fontSize: "12px", color: colors.slate, marginBottom: 10 };
+
+const ocrWarningBox = {
+  fontSize: "12px",
+  color: colors.danger,
+  background: colors.dangerSoft,
+  border: `1px solid ${colors.danger}`,
+  borderRadius: radius.sm,
+  padding: "8px 10px",
+  marginBottom: 8,
+  lineHeight: 1.45,
+};
+
+const textViewer = {
+  whiteSpace: "pre-wrap",
+  unicodeBidi: "plaintext",
+  fontSize: "14px",
+  lineHeight: 1.7,
+  color: colors.charcoal,
+  background: colors.paper,
+  border: `1px solid ${colors.hairline}`,
+  borderRadius: radius.sm,
+  padding: "14px 16px",
+  maxHeight: "50vh",
+  overflowY: "auto",
+};
+
+const ocrDisclaimer = { fontSize: "11px", color: colors.slate, fontStyle: "italic", marginTop: 10, marginBottom: 0 };
 
 export default CaseDetails;

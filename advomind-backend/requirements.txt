@@ -4,3 +4,7 @@ Werkzeug==3.0.4
 firebase-admin==6.5.0
 APScheduler==3.10.4
 python-dotenv==1.0.1
+requests==2.32.3
+pymupdf>=1.24.3
+pytesseract>=0.3.10
+Pillow>=10.0.0
