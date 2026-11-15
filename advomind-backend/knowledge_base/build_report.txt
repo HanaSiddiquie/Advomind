@@ -1,0 +1,141 @@
+source: SOURCES file found at knowledge_base\source_pdfs\SOURCES.txt with 0 entries: []
+
+== constitution_1973  (Constitution of the Islamic Republic of Pakistan, 1973)
+pages: 176 | contents on pages 1-16 | body starts at page 17 | skipped schedule/appendix lines: 282 | all-caps sub-heading lines: 29 (THIRD SCHEDULE; FOURTH SCHEDULE)
+source: NOT LISTED in SOURCES.txt
+pages with no usable text layer (OCR'd): none
+contents entries: 327 across 1 block(s) | units found: 324
+units: 325 (in force 309, omitted/repealed 16) -> 343 chunks, 11 long unit(s) split
+CHECK: 1 block(s) disagree with the contents:
+   main: contents list 327
+      MISSING from body (4): ['1', '54', '272', '273']
+         why 1: p.146 '1.' -> looks like a section start but was not accepted (out of order, or heading differs from contents 'The Republic and its territories')
+         why 54: p.172 '54.' -> looks like a section start but was not accepted (out of order, or heading differs from contents 'Summoning and prorogation of Majlis-e-Sh')
+         why 272: this number does not appear anywhere in the body text (text missing, or written another way)
+         why 273: the heading wording is there but the number isn't on the same line: p.141 '1273. First Provincial Assembly.__ (1) Notwithstanding anything contained in the'
+      NOT in contents (1): ['203DD']
+heading differs from contents in 8 unit(s), e.g.:
+   main 96A: body='Referendum as to confidence in Prime Min' toc='[Omitted]'
+   main 134: body='Resignation by Chief Minister] Omitted b' toc='[Omitted]'
+   main 135: body='Provincial Minister performing functions' toc='[Omitted]'
+   main 152A: body='National Security Council.] Omitted by t' toc='[Omitted]'
+chunk size (chars): min 46 | median 591 | max 3484
+longest chunks: [(3484, 'Const. Preamble'), (3434, 'Const. Art. 175A'), (3422, 'Const. Art. 271')]
+   sample> Const. Preamble | Preamble | [12th April, 1973] (In the name of Allah, the most Beneficent, the most Merciful.) WHEREAS sovereignty over the entire Universe belongs to Almighty Allah alone,
+   sample> Const. Art. 161 | Natural gas and hydro-electric power | [(1) Notwithstanding the provisions of Article 78,— / (a) the net proceeds of the Federal duty of excise on natural gas levied at well-head and collected by the F
+   sample> Const. Art. 280 | Continuance of Proclamation of Emergency | The Proclamation of Emergency issued on the twenty-third day of November, one thousand nine hundred and seventy-one, shall be deemed to be a Proclamation of Eme
+
+== contract_act_1872  (Contract Act, 1872)
+pages: 65 | contents on pages 1-10 | body starts at page 11 | skipped schedule/appendix lines: 9 | all-caps sub-heading lines: 3 (SCHEDULE)
+source: NOT LISTED in SOURCES.txt
+pages with no usable text layer (OCR'd): none
+contents entries: 194 across 1 block(s) | units found: 195
+units: 196 (in force 196, omitted/repealed 0) -> 198 chunks, 1 long unit(s) split
+CHECK: 1 block(s) disagree with the contents:
+   main: contents list 194
+      NOT in contents (1): ['141']
+chunk size (chars): min 50 | median 486 | max 3411
+longest chunks: [(3411, 'Contract Act s. 73'), (3379, 'Contract Act s. 73'), (3199, 'Contract Act s. 23')]
+   sample> Contract Act Preamble | Preamble | [25th April, 1872] Preamble: WHEREAS it is expedient to define and amend certain parts of the law relating to contracts; It is hereby enacted as follows:—
+   sample> Contract Act s. 141 | Surety’s right to benefit of creditor’s securities | A surety is entitled to the benefit of every security which the creditor has against the principal debtor at the time when the contract of suretyship is entered
+   sample> Contract Act s. 238 | Effect, on agreement, of misrepresentation or frau | Misrepresentations made, or frauds committed, by agents acting in the course of their business for their principals, have the same effect on agreements made by 
+
+== cpc_1908  (Code of Civil Procedure, 1908)
+pages: 318 | contents on pages 1-10 | body starts at page 11 | skipped schedule/appendix lines: 5741 | all-caps sub-heading lines: 33 (THE FIRST SCHEDULE; APPENDIX A; APPENDIX B; APPENDIX C; APPENDIX D; SCHEDULE; APPENDIX E; APPENDIX F; APPENDIX G; APPEND)
+source: NOT LISTED in SOURCES.txt
+pages with no usable text layer (OCR'd): [312, 313]
+contents entries: 170 across 1 block(s) | units found: 727
+units: 728 (in force 716, omitted/repealed 12) -> 731 chunks, 2 long unit(s) split
+CHECK: 1 block(s) disagree with the contents:
+   main: contents list 170
+      MISSING from body (2): ['48', '135A']
+         why 48: a line starting with this number is in the raw text but was DROPPED while cleaning (probably taken for a footnote): p.114 '48. Attachment of salary or allowances of public officer or servant of' || p.137 '48.  Procedure in suits against public officer.__ (1) Where 5[the Gove'
+         why 135A: the heading wording is there but the number isn't on the same line: p.53 '3[l35A. Exemption of members of Legislative bodies from arrest and detention und'
+      NOT in contents (2): ['27A', '34B']
+note: 10 more listed as omitted/repealed in the contents have no body text (fine, not counted above): ['25', '44', '59', '86', '87', '87A', '110', '111A', '125', '130']
+heading differs from contents in 2 unit(s), e.g.:
+   main 57: body='Subsistence Allowance.] Omitted by the C' toc='[Omitted]'
+   main 89: body='Arbitration.] Omitted by the Arbitration' toc='[Omitted]'
+chunk size (chars): min 45 | median 422 | max 3493
+longest chunks: [(3493, 'CPC s. 60'), (3456, 'CPC O.XXI r.47'), (3237, 'CPC O.XXXIV r.8')]
+   [page 312 as extracted]: case may be need be entered in the register. / Note.—Where there are numerous plaintiffs, or numerous defendants, the name of the first plaintiff only, or the first defendant only, as the / : 2 / ES 6 &‏ / Ss‏ و وج تج ے
+   [page 313 as extracted]: SI ‘ON / (6 ‘4 "Ip ‘O) 81۷3447 30 13181081 / 61 4VIA THE. NI 93312010 WOU ٥1۷341 40 WALSIOAY / LV 0100م))‎ 1511 YO) 070 / نا انا
+   sample> CPC Preamble | Preamble | [21st March, 1908] An Act to consolidate and amend the laws relating to the Procedure of the Courts of Civil Judicature. WHEREAS it is expedient to consolidate 
+   sample> CPC O.XVI r.21 | Rules as to witnesses to apply to parties summoned | Where any party to a suit is required to give evidence or to produce a document, the provisions as to witnesses shall apply to him so far as they are applicable
+   sample> CPC O.L r.1 | Provincial Small Cause Courts | The provisions hereinafter specified shall not extend to Courts constituted under the Provincial Small Cause Courts Act, 1887 (IX of 1887), [* * *] or to Courts
+
+== crpc_1898  (Code of Criminal Procedure, 1898)
+pages: 307 | contents on pages 1-26 | body starts at page 27 | skipped schedule/appendix lines: 1546 | all-caps sub-heading lines: 26 (SCHEDULE III; SCHEDULE V)
+source: NOT LISTED in SOURCES.txt
+pages with no usable text layer (OCR'd): none
+contents entries: 521 across 1 block(s) | units found: 489
+units: 490 (in force 461, omitted/repealed 29) -> 505 chunks, 11 long unit(s) split
+CHECK: 1 block(s) disagree with the contents:
+   main: contents list 521
+      MISSING from body (27): ['55', '93A', '93B', '93C', '113', '114', '115', '116', '117', '118', '119', '120', '121', '123', '124', '125', '126', '126A', '198', '199', '260', '401', '417', '514', '562', '563', '564']
+         why 55: the heading wording is there but the number isn't on the same line: p.44 '655. Arrest of vagabonds, habitual robbers, etc.__ (1) Any officer in charge of '
+         why 93A: the heading wording is there but the number isn't on the same line: p.54 '193A. Sending of summons for service outside Pakistan.__ (1) Where a Court in 2['
+         why 93B: the heading wording is there but the number isn't on the same line: p.54 '193B. Sending of warrants for execution outside Pakistan. Notwithstanding anythi'
+         why 93C: the heading wording is there but the number isn't on the same line: p.54 '193C. Service and execution in Pakistan of processes received from outside Pakis'
+         why 113: the heading wording is there but the number isn't on the same line: p.63 '7, 8113. Procedure in respect of person present in Court. If the person in respe'
+         why 114: p.64 '114, the Magistrate shall proceed to inquire into the  truth of the  i' -> text after the number starts with 't', not a capital/quote/bracket
+         why 115: the heading wording is there but the number isn't on the same line: p.64 '1, 2115. Copy of order under section 112 to accompany summons or warrant. Every '
+         why 116: the heading wording is there but the number isn't on the same line: p.64 '2116. Power to dispense with personal attendance. The Magistrate may, if he sees'
+         why 117: the heading wording is there but the number isn't on the same line: p.64 '1, 2117. Inquiry as to truth of information.__ (1) When an order under section 1'
+         why 118: the heading wording is there but the number isn't on the same line: p.65 '2118. Order to give security.__ (1) If, upon such inquiry, it is proved that it '
+         why 119: the heading wording is there but the number isn't on the same line: p.65 '2119. Discharge of person informed against. If, on an inquiry under section 117,'
+         why 120: the heading wording is there but the number isn't on the same line: p.65 '2120. Commencement of period for which security is required.__ (1) If any person'
+note: 5 more listed as omitted/repealed in the contents have no body text (fine, not counted above): ['226', '491A', '532', '534', '536']
+heading differs from contents in 19 unit(s), e.g.:
+   main 2: body='In N.W.F.P' toc='[Repealed]'
+   main 4: body='In Quetta Town, Cantonment Areas and Nas' toc='Definitions Words referring to acts Word'
+   main 34A: body='Sentences which Courts and Magistrates m' toc='[Omitted]'
+   main 38: body='* * * * * * *] D' toc='[Omitted] D.__ Conferment, Continuance a'
+chunk size (chars): min 18 | median 607 | max 3446
+very short chunks (<40 chars): 1 e.g. ['CrPC s. 3']
+longest chunks: [(3446, 'CrPC s. 4'), (3384, 'CrPC s. 45'), (3361, 'CrPC s. 98')]
+   sample> CrPC Preamble | Preamble | [22nd March, 1898] An Act to consolidate and amend the law relating to the Criminal Procedure. WHEREAS it is expedient to consolidate and amend the law relating
+   sample> CrPC s. 247 | Non-appearance of complainant | If the summons has been issued on complaint, and upon the day appointed for the appearance of the accused, or any day subsequent thereto to which the hearing ma
+   sample> CrPC s. 565 | Order for notifying address of previously convicte | [(5)] Any person charged with a breach of any such rule may be tried by a Magistrate of competent jurisdiction in the district in which the place last notified 
+
+== ppc_1860  (Pakistan Penal Code, 1860)
+pages: 179 | contents on pages 1-29 | body starts at page 30 | skipped schedule/appendix lines: 0 | all-caps sub-heading lines: 14
+source: NOT LISTED in SOURCES.txt
+pages with no usable text layer (OCR'd): none
+contents entries: 637 across 1 block(s) | units found: 633
+units: 634 (in force 613, omitted/repealed 21) -> 642 chunks, 7 long unit(s) split
+CHECK: 1 block(s) disagree with the contents:
+   main: contents list 637
+      MISSING from body (4): ['362N', '376B', '500', '501']
+         why 362N: the heading wording is there but the number isn't on the same line: p.161 '462N.   Recovery of outstanding   amounts   from   persons   involved   in   sec'
+         why 376B: this number does not appear anywhere in the body text (text missing, or written another way)
+         why 500: the heading wording is there but the number isn't on the same line: p.175 '1500. Punishment for defamation. Whoever defames another shall be punished with '
+         why 501: the heading wording is there but the number isn't on the same line: p.176 '1501. Printing or engraving matter known to be defamatory. Whoever prints or eng'
+      NOT in contents (3): ['229', '337Z', '440']
+note: 3 more listed as omitted/repealed in the contents have no body text (fine, not counted above): ['366', '372', '373']
+heading differs from contents in 17 unit(s), e.g.:
+   main 13: body='Definition of “Queen”.] Omitted by A.O.,' toc='[Omitted]'
+   main 15: body='Definition of “British India”.] Rep' toc='[Repealed]'
+   main 16: body='Definition of “Government of India”.] Re' toc='[Repealed]'
+   main 18: body='Definition of “Presidency”.] Rep' toc='[Repealed]'
+chunk size (chars): min 52 | median 424 | max 3465
+longest chunks: [(3465, 'PPC s. 499'), (3462, 'PPC s. 464'), (3461, 'PPC s. 378')]
+   sample> PPC Preamble | Preamble | Preamble. WHEREAS it is expedient to provide a general Penal Code for [Pakistan] ; It is enacted as follows:—
+   sample> PPC s. 291 | Continuance of nuisance after injunction to discon | Whoever repeats or continues a public nuisance, having been enjoined by any public servant who has lawful authority to issue such injunction not to repeat or co
+   sample> PPC s. 511 | Punishment for attempting to commit offences punis | Whoever attempts to commit an offence punishable by this Code with [imprisonment for life], or imprisonment, or to cause such an offence to be committed, and in
+
+== qanun_e_shahadat_1984  (Qanun-e-Shahadat Order, 1984)
+pages: 65 | contents on pages 1-9 | body starts at page 10 | skipped schedule/appendix lines: 0 | all-caps sub-heading lines: 9
+source: NOT LISTED in SOURCES.txt
+pages with no usable text layer (OCR'd): none
+contents entries: 168 across 1 block(s) | units found: 168
+units: 169 (in force 169, omitted/repealed 0) -> 176 chunks, 6 long unit(s) split
+CHECK: every section in the contents was found, and nothing extra  [OK]
+chunk size (chars): min 32 | median 458 | max 3481
+very short chunks (<40 chars): 1 e.g. ['QSO Art. 86']
+longest chunks: [(3481, 'QSO Art. 103'), (3396, 'QSO Art. 46'), (3365, 'QSO Art. 27')]
+   sample> QSO Preamble | Preamble | PRESIDENT’S ORDER No. X OF 1984 [28th October, 1984] WHEREAS it is expedient to revise, amend and consolidate the law of evidence so as to bring it in conformit
+   sample> QSO Art. 81 | Admission of execution by party to attested docume | The admission of a party to an attested document of its execution by himself shall be sufficient proof of its execution as against him, though it be a document 
+   sample> QSO Art. 166 | Repeal | The Evidence Act, 1872 (I of 1872), is hereby repealed.
+
+TOTAL: 2595 chunks, of which 2516 are in force and not flagged (these are what the index will use).

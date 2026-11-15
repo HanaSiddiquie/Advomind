@@ -180,7 +180,12 @@ function CaseDetails() {
     const result = await summarizeCase(caseId);
     setCaseData(prev => ({
       ...prev,
-      aiSummary: { text: result.summary, generatedAt: result.generatedAt }
+      aiSummary: {
+        text: result.summary,
+        generatedAt: result.generatedAt,
+        filesUsed: result.filesUsed || [],
+        filesSkipped: result.filesSkipped || []
+      }
     }));
   } catch (err) {
     console.error(err);
@@ -675,7 +680,7 @@ function CaseDetails() {
     }
   };
 
-  const canExtractText = (f) => /\.(pdf|png|jpe?g|tiff?|bmp|webp)$/i.test(f.name || "");
+  const canExtractText = (f) => /\.(pdf|png|jpe?g|tiff?|bmp|webp|docx|txt)$/i.test(f.name || "");
 
 const runExtraction = async (f, forceOcr = false) => {
   setExtractingFileId(f.id);
@@ -695,9 +700,12 @@ const runExtraction = async (f, forceOcr = false) => {
 
 const ocrSummary = (f) => {
   if (f.ocrMethod === "text-layer") return "Text layer";
+  if (f.ocrMethod === "document-text") return "Document text";
   if (typeof f.ocrConfidence === "number") return `OCR · ${Math.round(f.ocrConfidence)}%`;
   return "OCR";
 };
+const isOldWordFile = (f) => /\.doc$/i.test(f.name || "");
+
 
   const sortedHearings = [...hearings].sort(
     (a, b) => new Date(a.date) - new Date(b.date)
@@ -878,16 +886,38 @@ const ocrSummary = (f) => {
         <p style={summaryMeta}>
           Generated {new Date(caseData.aiSummary.generatedAt).toLocaleString()}
         </p>
+
+        {(caseData.aiSummary.filesUsed || []).length > 0 && (
+          <p style={summaryMeta}>
+            Based on the case details and these documents:{" "}
+            {caseData.aiSummary.filesUsed
+              .map(u => (u.note ? `${u.name} (${u.note})` : u.name))
+              .join(", ")}
+          </p>
+        )}
+
+        {(caseData.aiSummary.filesSkipped || []).length > 0 && (
+          <div style={summarySkipped}>
+            <strong>Not included:</strong>
+            <ul style={{ margin: "6px 0 0 16px", padding: 0 }}>
+              {caseData.aiSummary.filesSkipped.map((s, i) => (
+                <li key={i}>{s.name}: {s.reason}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     ) : (
       <p style={emptyText}>
-        No summary yet — click "Generate Summary" to create one from this case's details, notes, and hearings.
+        No summary yet. Click "Generate Summary" to create one from this case's details, notes,
+        hearings and uploaded documents.
       </p>
     )}
 
     <p style={summaryDisclaimer}>
-      AI-generated from information already in Advomind. It doesn't yet reflect the contents
-      of uploaded files, and should be checked against your own knowledge of the case.
+      AI-generated from the case's notes, hearings and the readable text of uploaded documents.
+      Documents whose text is missing or unreliable are left out (listed above). Check it against
+      your own knowledge of the case.
     </p>
   </div>
 )}
@@ -1335,9 +1365,10 @@ const ocrSummary = (f) => {
   {viewingFile && (
     <>
       <div style={ocrMeta}>
-        {ocrSummary(viewingFile)} · {viewingFile.ocrPages} page(s)
-        {viewingFile.extractedAt ? ` · extracted ${new Date(viewingFile.extractedAt).toLocaleString()}` : ""}
-      </div>
+  {ocrSummary(viewingFile)}
+  {viewingFile.ocrPages ? ` · ${viewingFile.ocrPages} page(s)` : ""}
+  {viewingFile.extractedAt ? ` · extracted ${new Date(viewingFile.extractedAt).toLocaleString()}` : ""}
+</div>
 
       {(viewingFile.ocrWarnings || []).map((w, i) => (
         <div key={i} style={ocrWarningBox}>{w}</div>
@@ -1618,6 +1649,17 @@ const summaryMeta = {
   color: colors.slate,
   marginTop: 10,
   marginBottom: 0,
+};
+
+const summarySkipped = {
+  fontSize: "12px",
+  color: colors.charcoal,
+  background: colors.surface,
+  border: `1px solid ${colors.hairline}`,
+  borderRadius: radius.sm,
+  padding: "8px 10px",
+  marginTop: 12,
+  lineHeight: 1.5,
 };
 
 const summaryDisclaimer = {

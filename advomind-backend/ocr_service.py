@@ -337,8 +337,92 @@ def _extract_image(data):
     )
 
 
+def _truncate(text, warnings):
+    truncated = False
+    if len(text) > MAX_STORED_CHARS:
+        text = text[:MAX_STORED_CHARS]
+        truncated = True
+        warnings.append("Extracted text was cut off to fit the storage limit.")
+    return text, truncated
+
+
+def _extract_docx(data):
+    """Word (.docx) files already contain their text, so this is exact - no OCR.
+
+    Reads body paragraphs and tables in document order. Does NOT read headers,
+    footers, text boxes, footnotes, or text inside embedded images."""
+    try:
+        from docx import Document
+        from docx.table import Table
+        from docx.text.paragraph import Paragraph
+    except ImportError:
+        raise RuntimeError(
+            "Word file support needs the 'python-docx' package. Install it with: pip install python-docx"
+        )
+
+    try:
+        document = Document(io.BytesIO(data))
+    except Exception as exc:
+        raise ValueError("Could not read the Word document.") from exc
+
+    warnings = []
+    lines = []
+
+    for child in document.element.body.iterchildren():
+        tag = child.tag.rsplit("}", 1)[-1]
+
+        if tag == "p":
+            text = Paragraph(child, document).text.strip()
+            if text:
+                lines.append(text)
+
+        elif tag == "tbl":
+            for row in Table(child, document).rows:
+                cells = []
+                prev_tc = None
+                for cell in row.cells:
+                    if cell._tc is prev_tc:      # merged cells repeat the same cell
+                        continue
+                    prev_tc = cell._tc
+                    cells.append(cell.text.strip().replace("\n", " "))
+                if any(cells):
+                    lines.append(" | ".join(cells))
+
+    images = len(document.inline_shapes)
+    if images:
+        warnings.append(
+            f"This document contains {images} embedded image(s). Any text inside images "
+            f"(e.g. a scanned page pasted into Word) isn't extracted."
+        )
+
+    text, truncated = _truncate("\n".join(lines), warnings)
+
+    if not text.strip():
+        warnings.append("No text was found in this document.")
+
+    return ExtractionResult(
+        text=text, method="document-text", pages=0, truncated=truncated, warnings=warnings
+    )
+
+
+def _extract_plain_text(data):
+    warnings = []
+
+    try:
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = data.decode("cp1256", errors="replace")   # Windows Arabic/Urdu code page
+        warnings.append("This text file isn't UTF-8, so some characters may be wrong.")
+
+    text, truncated = _truncate(text.strip(), warnings)
+
+    return ExtractionResult(
+        text=text, method="document-text", pages=0, truncated=truncated, warnings=warnings
+    )
+
+
 def extract_text(data, filename, force_ocr=False):
-    """data: raw file bytes. filename: used only to decide PDF vs image."""
+    """data: raw file bytes. filename: used only to decide the file type."""
     ext = os.path.splitext((filename or "").lower())[1]
 
     if ext == ".pdf":
@@ -347,6 +431,19 @@ def extract_text(data, filename, force_ocr=False):
     if ext in IMAGE_EXTENSIONS:
         return _extract_image(data)
 
+    if ext == ".docx":
+        return _extract_docx(data)
+
+    if ext == ".txt":
+        return _extract_plain_text(data)
+
+    if ext == ".doc":
+        raise UnsupportedFileType(
+            "Old-format .doc files aren't supported. Open it in Word and use "
+            "Save As -> .docx, then upload that."
+        )
+
     raise UnsupportedFileType(
-        f"Text extraction supports PDFs and images only (got '{ext or 'no extension'}')."
+        f"Text extraction supports PDFs, images, Word (.docx) and text files "
+        f"(got '{ext or 'no extension'}')."
     )

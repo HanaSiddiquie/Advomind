@@ -12,6 +12,9 @@ Writes one <name>.txt per input file and prints a summary line for each,
 including OCR confidence and any warnings. READ THE WARNINGS: a statute with
 a low-confidence or "text may be missing" warning should be fixed before it
 goes anywhere near the knowledge base.
+
+Unlike the web app (which caps pages and characters to keep Firestore
+documents small), this tool reads EVERY page and keeps ALL the text.
 """
 
 import argparse
@@ -19,7 +22,18 @@ import os
 import sys
 import time
 
+from dotenv import load_dotenv
+
+# Pick up TESSERACT_CMD / OCR_LANGS from .env, same as the Flask app does -
+# this must happen BEFORE ocr_service is imported, which reads them at import time.
+load_dotenv(override=True)
+
 import ocr_service
+
+# The web app's limits exist to keep Firestore documents small. Whole statutes
+# are far bigger than that, so lift both limits for bulk use.
+ocr_service.MAX_PAGES = 1_000_000
+ocr_service.MAX_STORED_CHARS = 1_000_000_000
 
 SUPPORTED = {".pdf"} | ocr_service.IMAGE_EXTENSIONS
 
@@ -56,6 +70,7 @@ def main():
     for src in iter_inputs(args.path):
         name = os.path.basename(src)
         t0 = time.time()
+        print(f"... reading {name}", flush=True)
 
         try:
             with open(src, "rb") as f:
