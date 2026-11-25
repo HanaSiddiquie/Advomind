@@ -7,7 +7,10 @@ export async function checkEmailDomain(email) {
   try {
     const res = await fetch(`${BASE_URL}/email/check`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true"
+      },
       body: JSON.stringify({ email }),
     });
     const data = await res.json().catch(() => ({}));

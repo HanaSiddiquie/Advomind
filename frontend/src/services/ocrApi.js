@@ -13,6 +13,7 @@ export async function extractFileText(fileId, forceOcr = false) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "true",
       Authorization: `Bearer ${idToken}`,
     },
     body: JSON.stringify({ fileId, forceOcr }),

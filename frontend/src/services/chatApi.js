@@ -14,10 +14,11 @@ async function request(path, { method = "GET", body, timeoutMs = 30000 } = {}) {
 
   let res;
   try {
-    res = await fetch(`${BASE_URL}${path}`, {
+        res = await fetch(`${BASE_URL}${path}`, {
       method,
       headers: {
         "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
         Authorization: `Bearer ${idToken}`,
       },
       body: body === undefined ? undefined : JSON.stringify(body),

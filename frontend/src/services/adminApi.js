@@ -12,6 +12,7 @@ async function authedFetch(path, options = {}) {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "true",
       Authorization: `Bearer ${idToken}`,
       ...(options.headers || {}),
     },
