@@ -63,6 +63,7 @@ CONTEXT_HEADING = re.compile(r"^(PART|CHAPTER)\s+([IVXLCDM]+[A-Z]?|\d+[A-Z]?)\b\
 SKIP_HEADING = re.compile(r"^(?:THE\s+)?(?:[A-Z]+\s+)?(?:SCHEDULE|APPENDIX|APPENDICES)\b")
 NEW_PARA = re.compile(r"^(\[?\(\w{1,4}\)|(?:Explanation|Illustrations?|Provided|Exceptions?)\b)")
 SPLIT_AT_CLAUSE = re.compile(r"^\[?\(\d+[A-Za-z]?\)")
+PEEL_BODY = re.compile(r"^([0-9lI]{1,3})[ \-\u2013]?([A-Z]{0,2})[.,]\s*(.*)$")
 
 
 # ----------------------------------------------------------------------------- helpers
@@ -98,10 +99,15 @@ def split_heading(text):
     return "", t
 
 
-def start_form_ok(m):
-    rest = m.group(3).strip()
+def rest_form_ok(rest):
+    """Is the text after a section number plausibly the start of a heading?"""
+    rest = rest.strip()
     return ((not rest) or rest[0].isupper() or rest[0] in "[\"\u201c\u2018'*]{_"
             or bool(re.match(r"\d{1,2}\*?\[", rest)) or bool(re.match(r"\d{1,2}\*", rest)))
+
+
+def start_form_ok(m):
+    return rest_form_ok(m.group(3))
 
 
 def title_is_omitted(title):
@@ -117,20 +123,6 @@ def says_omitted(text):
                 or re.match(r"^\W{0,3}(?:Omitted|Repealed)\b", t))
 
 
-def next_key(toc_block, last):
-    """The contents entry that should come right after `last` (or the first one)."""
-    if not toc_block:
-        return None
-    keys = list(toc_block)
-    if last is None:
-        return keys[0]
-    cur = f"{last[0]}{last[1]}"
-    if cur in toc_block:
-        idx = keys.index(cur)
-        return keys[idx + 1] if idx + 1 < len(keys) else None
-    return None
-
-
 def accept_number(num, suffix, last):
     if last is None:
         return int(num) <= 3
@@ -139,6 +131,39 @@ def accept_number(num, suffix, last):
     if n == ln:
         return suffix > ls
     return ln < n <= ln + MAX_GAP
+
+
+def peel_start(s, toc_block, idx_map, pos, nxt=""):
+    """A footnote reference is sometimes printed as plain digits glued to the front of the number
+    ('1500.' = footnote 1 + section 500, '7, 8113.' = footnotes 7 and 8 + section 113, '3[l35A.' with an
+    'l' read for '1'). Peel up to 8 junk characters off the front - but ONLY accept the result if what
+    is left is a section the contents say is due (the next one, or one in the window with a matching
+    heading). Returns (number, suffix, rest, footnote numbers) or None."""
+    for j in range(0, 9):
+        junk = s[:j]
+        if junk and not re.fullmatch(r"[\d,\s\[\]\*\{\}]+", junk):
+            break
+        m = PEEL_BODY.match(s[j:])
+        if not m:
+            continue
+        num = m.group(1).replace("l", "1").replace("I", "1")
+        if not num.isdigit() or num.startswith("0"):
+            continue
+        key = num + m.group(2)
+        if key not in idx_map:
+            continue
+        idx = idx_map[key]
+        if not (pos <= idx < pos + TOC_WINDOW):
+            continue
+        rest = m.group(3).strip()
+        if not rest_form_ok(rest):
+            continue
+        probe_src = rest or nxt
+        probe = split_heading(probe_src)[0] or probe_src[:80]
+        title = toc_block[key]
+        if idx == pos or title_match(probe, title) or title_is_omitted(title):
+            return num, m.group(2), rest, [int(x) for x in re.findall(r"\d{1,2}", junk)]
+    return None
 
 
 # ----------------------------------------------------------------------------- loading / cleaning
@@ -384,6 +409,10 @@ def parse_units(entries, toc):
             i += 1
             continue
 
+        nxt = entries[i + 1][1] if i + 1 < len(entries) else ""
+        accepted, marks = False, []
+        num = suf = rest = key = ""
+
         m = UNIT_START.match(s)
         alt = False
         if not m:
@@ -391,11 +420,9 @@ def parse_units(entries, toc):
             alt = m is not None
         if m and start_form_ok(m):
             num, suf, rest = m.group(1), m.group(2), m.group(3).strip()
-            nxt = entries[i + 1][1] if i + 1 < len(entries) else ""
             probe_src = rest or nxt
             probe = split_heading(probe_src)[0] or probe_src[:80]
             key = num + suf
-            accepted = False
             in_toc = key in tb_index.get(block, {})
 
             if in_toc:
@@ -411,17 +438,28 @@ def parse_units(entries, toc):
                 accepted = True
 
             if accepted:
-                finalize()
-                if state["pre"] and not units:
-                    units.append({"block": "preamble", "number": "Preamble", "lines": state["pre"],
-                                  "context": [], "start": state["pre"][0][0]})
-                state["pre"] = []
                 marks = [(page, int(x)) for x in re.findall(r"(\d{1,2})\*?\[", s[:m.start(1)])]
-                state["cur"] = {"block": block, "number": key, "lines": [(page, rest)] if rest else [],
-                                "context": ctx_list(), "start": page, "marks": marks}
-                last = (int(num), suf)
-                i += 1
-                continue
+
+        if not accepted and block in tb_index and s[:1] in "0123456789[*{":
+            pk = peel_start(s, toc[block], tb_index[block], ptr[block], nxt)
+            if pk:
+                num, suf, rest, junk_marks = pk
+                key = num + suf
+                ptr[block] = tb_index[block][key] + 1
+                marks = [(page, n) for n in junk_marks]
+                accepted = True
+
+        if accepted:
+            finalize()
+            if state["pre"] and not units:
+                units.append({"block": "preamble", "number": "Preamble", "lines": state["pre"],
+                              "context": [], "start": state["pre"][0][0]})
+            state["pre"] = []
+            state["cur"] = {"block": block, "number": key, "lines": [(page, rest)] if rest else [],
+                            "context": ctx_list(), "start": page, "marks": marks}
+            last = (int(num), suf)
+            i += 1
+            continue
 
         if state["cur"] is not None:
             state["cur"]["lines"].append((page, s))
@@ -587,6 +625,15 @@ def diagnose(key, entries, toc_block, raw_entries=None):
     title = norm(toc_block.get(key, ""))[:28]
     if len(title) >= 10 and not title_is_omitted(toc_block.get(key, "")):
         found = [(p, s) for p, s in entries if title in norm(s)][:2]
+        for p, s in found:
+            m2 = UNIT_START.match(s)
+            if m2:
+                k2 = m2.group(1) + m2.group(2)
+                if k2 != key and k2.endswith(key):
+                    return f"footnote digits look glued onto the number: p.{p} '{s[:70]}' (read as {k2}, expected {key})"
+                if k2 != key:
+                    return (f"this heading is at section {k2} (p.{p} '{s[:70]}'), so the contents entry "
+                            f"'{key}' may be a typo for '{k2}'")
         if found:
             return ("the heading wording is there but the number isn't on the same line: "
                     + " || ".join(f"p.{p} '{s[:80]}'" for p, s in found))
@@ -598,19 +645,36 @@ def diagnose(key, entries, toc_block, raw_entries=None):
     return "this number does not appear anywhere in the body text (text missing, or written another way)"
 
 
+def read_text_guess(path):
+    """Read a small text file whatever encoding Windows saved it in (PowerShell writes UTF-16)."""
+    with open(path, "rb") as f:
+        data = f.read()
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        text = data.decode("utf-16", errors="replace")
+    elif data.startswith(b"\xef\xbb\xbf"):
+        text = data.decode("utf-8-sig", errors="replace")
+    elif b"\x00" in data[:400]:
+        text = data.decode("utf-16-le", errors="replace")
+    else:
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError:
+            text = data.decode("cp1252", errors="replace")
+    return text.lstrip("\ufeff")  # ignore any stray byte-order marks
+
+
 def parse_sources(path):
     out = {}
-    with open(path, encoding="utf-8-sig", errors="replace") as f:
-        for line in f:
-            parts = [p.strip() for p in line.split("|")]
-            if len(parts) < 4 or not parts[0].lower().endswith(".pdf"):
-                continue
-            date = re.search(r"\d{4}-\d{2}-\d{2}", parts[4]) if len(parts) > 4 else None
-            out[parts[0][:-4].strip()] = {
-                "title": parts[1], "site": parts[2], "url": parts[3],
-                "downloaded": date.group(0) if date else (parts[4] if len(parts) > 4 else ""),
-                "note": parts[5] if len(parts) > 5 else "",
-            }
+    for line in read_text_guess(path).splitlines():
+        parts = [p.strip() for p in line.split("|")]
+        if len(parts) < 4 or not parts[0].lower().endswith(".pdf"):
+            continue
+        date = re.search(r"\d{4}-\d{2}-\d{2}", parts[4]) if len(parts) > 4 else None
+        out[parts[0][:-4].strip()] = {
+            "title": parts[1], "site": parts[2], "url": parts[3],
+            "downloaded": date.group(0) if date else (parts[4] if len(parts) > 4 else ""),
+            "note": parts[5] if len(parts) > 5 else "",
+        }
     return out
 
 
@@ -701,9 +765,18 @@ def process_doc(doc_id, base, pdf_dir, check_pdf, sources=None):
             if missing:
                 R.append(f"      MISSING from body ({len(missing)}): {missing[:30]}{' ...' if len(missing) > 30 else ''}")
                 if blk == "main":
-                    first_order = next((n for n, (_p, l) in enumerate(body_entries) if is_upper_line(l) and BLOCK_HEADING.match(l)), len(body_entries))
+                    # the real body only: stop at the first Order or Schedule, where numbering restarts
+                    cut = next((n for n, (_p, l) in enumerate(body_entries)
+                                if is_upper_line(l) and (BLOCK_HEADING.match(l) or (SKIP_HEADING.match(l) and len(l) < 70))), len(body_entries))
+                    if cut < len(body_entries):
+                        cut_page, cut_line = body_entries[cut]
+                        stop = next((n for n, (p, t) in enumerate(raw_entries)
+                                     if p == cut_page and NOISE_TAIL.sub("", t).strip() == cut_line), len(raw_entries))
+                        main_raw = raw_entries[:stop]
+                    else:
+                        main_raw = raw_entries
                     for k in missing[:12]:
-                        R.append(f"         why {k}: {diagnose(k, body_entries[:first_order], toc.get(blk, {}), raw_entries)}")
+                        R.append(f"         why {k}: {diagnose(k, body_entries[:cut], toc.get(blk, {}), main_raw)}")
             if extra:
                 R.append(f"      NOT in contents ({len(extra)}): {extra[:30]}{' ...' if len(extra) > 30 else ''}")
         if len(problems) > 12:
@@ -762,9 +835,17 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
 
     report, all_chunks = [], []
-    report.append("source: " + (f"SOURCES file found at {sources_path} with {len(sources)} entries: {sorted(sources)}"
-                                if sources_path else f"SOURCES.txt NOT FOUND (looked in: {', '.join(tried)})"))
+    if sources_path and not sources:
+        first = read_text_guess(sources_path).splitlines()[:1]
+        shown = repr(first[0][:80]) if first else "(empty file)"
+        report.append(f"source: SOURCES file found at {sources_path} but it has 0 usable entries. Each line must look like: "
+                      f"file.pdf | title | site | url | downloaded YYYY-MM-DD | note.   First line read as: {shown}")
+    elif sources_path:
+        report.append(f"source: SOURCES file found at {sources_path} with {len(sources)} entries: {sorted(sources)}")
+    else:
+        report.append(f"source: SOURCES.txt NOT FOUND (looked in: {', '.join(tried)})")
     report.append("")
+
     for d in docs:
         try:
             chunks, lines = process_doc(d, args.base, pdf_dir, not args.no_pdf_check, sources)

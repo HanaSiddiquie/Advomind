@@ -11,6 +11,8 @@ import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
 import { useAuthRole } from "../context/AuthRoleContext";
 import { CMS_URL } from "../services/cms";
+import { confirmDialog } from "../components/Notifications";
+import VoiceWrap from "../components/ui/VoiceWrap";
 
 function formatDate(dateStr) {
   if (!dateStr) return "No date set";
@@ -104,7 +106,7 @@ function HearingDetails() {
   };
 
   const deleteHearing = async () => {
-    if (!window.confirm("Delete this hearing?")) return;
+    if (!await confirmDialog("Delete this hearing?")) return;
 
     await deleteDoc(doc(db, "hearings", id));
     alert("Deleted");
@@ -176,6 +178,7 @@ function HearingDetails() {
             label="Event"
             value={form.event}
             onChange={(e) => setForm({ ...form, event: e.target.value })}
+                        voice
             placeholder="Event"
           />
 
@@ -187,18 +190,21 @@ function HearingDetails() {
           />
 
           <label style={selectLabel}>Notes</label>
-          <textarea
-            className="am-input"
-            style={textareaStyle}
-            value={form.notes}
-            onChange={(e) => setForm({ ...form, notes: e.target.value })}
-            placeholder="Notes"
-          />
+                    <VoiceWrap>
+            <textarea
+              className="am-input"
+              style={textareaStyle}
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              placeholder="Notes"
+            />
+          </VoiceWrap>
 
           <Input
             label="Reminder"
             value={form.reminder}
             onChange={(e) => setForm({ ...form, reminder: e.target.value })}
+                        voice
             placeholder="Reminder"
           />
 

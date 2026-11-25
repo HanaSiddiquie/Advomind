@@ -10,6 +10,8 @@ import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
 import { useAuthRole } from "../context/AuthRoleContext";
 import { fetchScoped } from "../services/scopedQuery";
+import Loading from "../components/ui/Loading";
+import VoiceWrap from "../components/ui/VoiceWrap";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const ALL_COURTS = ["civil", "session", "high"];
@@ -171,7 +173,7 @@ function Diary() {
     setViewMonth(new Date(y, m - 1, 1));
   };
 
-  if (!userId) return <PageContainer title="Case Diary"><p style={emptyText}>Loading…</p></PageContainer>;
+  if (!userId) return <PageContainer title="Case Diary"><Loading /></PageContainer>;
 
   return (
     <PageContainer
@@ -256,7 +258,12 @@ function Diary() {
                   </div>
                 </div>
               );
-            })}
+                        })}
+          </div>
+
+          <div style={legend}>
+            <span style={legendItem}><span style={{ ...dot, background: colors.accent }} /> Hearing</span>
+            <span style={legendItem}><span style={{ ...dot, background: colors.ink }} /> Diary note</span>
           </div>
         </Card>
 
@@ -304,21 +311,24 @@ function Diary() {
             <>
               <h4 style={addTitle}>Add Event</h4>
 
-              <Input
+                            <Input
                 label="Title"
+                voice
                 placeholder="e.g. Client meeting"
                 value={newEvent.title}
                 onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
               />
 
               <label style={selectLabel}>Notes</label>
-              <textarea
-                className="am-input"
-                placeholder="Optional notes"
-                value={newEvent.notes}
-                onChange={(e) => setNewEvent({ ...newEvent, notes: e.target.value })}
-                style={textareaStyle}
-              />
+                            <VoiceWrap>
+                <textarea
+                  className="am-input"
+                  placeholder="Optional notes"
+                  value={newEvent.notes}
+                  onChange={(e) => setNewEvent({ ...newEvent, notes: e.target.value })}
+                  style={textareaStyle}
+                />
+              </VoiceWrap>
 
               <Button onClick={addEvent} full>
                 Add to {new Date(selectedDate + "T00:00:00").toLocaleDateString("default", { month: "short", day: "numeric" })}
@@ -636,6 +646,20 @@ const textareaStyle = {
 const emptyText = {
   color: colors.slate,
   fontSize: "13px",
+};
+
+const legend = {
+  display: "flex",
+  gap: 16,
+  marginTop: 14,
+  fontSize: "12px",
+  color: colors.slate,
+};
+
+const legendItem = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
 };
 
 export default Diary;

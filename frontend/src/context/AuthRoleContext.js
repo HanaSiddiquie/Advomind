@@ -6,6 +6,16 @@ import { auth, db } from "../firebase";
 
 const AuthRoleContext = createContext(null);
 
+// Accounts created before this moment pre-date the email-verification rule and are let in as before.
+// New accounts must verify their email before they can use the app.
+const VERIFY_FROM = Date.parse("2026-11-22T16:00:00Z");
+
+export function needsVerification(u) {
+  if (!u || u.emailVerified) return false;
+  const created = Date.parse(u.metadata?.creationTime || "");
+  return Number.isFinite(created) && created >= VERIFY_FROM;
+}
+
 /**
  * Wrap the app in this. After login, resolves:
  *  - user: the raw Firebase Auth user (or null)
@@ -27,7 +37,8 @@ export function AuthRoleProvider({ children }) {
   const [profileLoading, setProfileLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
+        const unsub = onAuthStateChanged(auth, (raw) => {
+      const u = needsVerification(raw) ? null : raw; // unverified = treated as logged out
       setUser(u);
       setAuthLoading(false);
       if (!u) {

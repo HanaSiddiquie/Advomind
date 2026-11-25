@@ -7,7 +7,21 @@ const tones = {
   success: { background: colors.successSoft, color: colors.success },
   danger: { background: colors.dangerSoft, color: colors.danger },
   dark: { background: colors.ink, color: colors.white },
+  warn: { background: "#FBF3E0", color: "#8A5A00" },
+  info: { background: "#E8EEF7", color: "#234A7D" },
+  civil: { background: "#E3F1EF", color: "#0F5E55" },
+  criminal: { background: "#F1E6F4", color: "#6B2A7A" },
 };
+
+// Case status -> badge colour
+export function statusTone(status) {
+  switch (status) {
+    case "Open": return "success";
+    case "In Progress": return "info";
+    case "On Hold": return "warn";
+    default: return "neutral"; // Closed, Archived, unknown
+  }
+}
 
 function Badge({ children, tone = "neutral", style }) {
   return (
@@ -21,7 +35,7 @@ function Badge({ children, tone = "neutral", style }) {
         textTransform: "uppercase",
         padding: "4px 10px",
         borderRadius: radius.sm,
-        ...tones[tone],
+        ...(tones[tone] || tones.neutral),
         ...style,
       }}
     >

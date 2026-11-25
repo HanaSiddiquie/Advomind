@@ -52,7 +52,9 @@ PAGE_MARK = re.compile(r"^--- Page (\d+) ---$")
 PAGE_HEADER = re.compile(r"^Page \d+ of \d+$", re.I)
 NOISE_TAIL = re.compile(r"\s*RGN\s+Dated\.?\s*\d{1,2}-\d{1,2}-\d{4}\s*$")
 MARK_PREFIX = r"(?:(?:\d{1,2}\*?\[|\{|\[|\*)\s*)*"
-UNIT_START = re.compile(r"^" + MARK_PREFIX + r"(\d{1,3})([A-Z]{0,2})\.\s*(.*)$")
+UNIT_START = re.compile(r"^" + MARK_PREFIX + r"(\d{1,3})[ \-\u2013]?([A-Z]{0,2})\.\s*(.*)$")
+# typo tolerance: "185," for "185." - only ever trusted when the contents confirm it
+ALT_START = re.compile(r"^" + MARK_PREFIX + r"(\d{1,3})[ \-\u2013]?([A-Z]{0,2}),\s*(.*)$")
 FOOTNOTE_START = re.compile(r"^(\d{1,2})(?=[A-Z][a-z])")
 MARKER = re.compile(r"(\d{1,2})\[")
 SEPARATOR = re.compile(r"^[_=\-]{3,}$")
@@ -90,7 +92,7 @@ def title_match(a, b):
 def split_heading(text):
     """'Counterfeiting coin. Whoever...' -> ('Counterfeiting coin', 'Whoever...')"""
     t = text.strip()
-    m = re.search(r"\.\s*(?:_{2,}|\u2014|\u2013|-{1,2})\s*|\.\s+", t[:240])
+    m = re.search(r"\.\s*(?:_+|\u2014|\u2013|-{1,2})\s*|\.\s+", t[:240])
     if m and m.start() <= 200:
         return t[:m.start()].strip(" [\u2014\u2013-_"), t[m.end():].strip()
     return "", t
@@ -98,7 +100,7 @@ def split_heading(text):
 
 def start_form_ok(m):
     rest = m.group(3).strip()
-    return ((not rest) or rest[0].isupper() or rest[0] in "[\"\u201c\u2018'*]{"
+    return ((not rest) or rest[0].isupper() or rest[0] in "[\"\u201c\u2018'*]{_"
             or bool(re.match(r"\d{1,2}\*?\[", rest)) or bool(re.match(r"\d{1,2}\*", rest)))
 
 
@@ -177,7 +179,7 @@ def clean_page(lines):
             continue
 
         if in_notes:
-            struct = (re.match(r"^\d{1,3}[A-Z]{0,2}\.$", s) or
+            struct = (re.match(r"^\d{1,3}[A-Z]{0,2}\.$", s) or is_start(s) or
                       (is_upper_line(s) and (BLOCK_HEADING.match(s) or CONTEXT_HEADING.match(s) or SKIP_HEADING.match(s))))
             if not struct:
                 if last_note is not None:
@@ -206,7 +208,7 @@ def ocr_pages_from_pdf(pdf_path):
 
 
 # ----------------------------------------------------------------------------- table of contents
-SENTENCE_BREAK = re.compile(r"\.\s+[A-Z\[(\"]|\.\s*(?:_{2,}|[\u2014\u2013])|\.\s*-{1,2}\s")
+SENTENCE_BREAK = re.compile(r"\.\s+[A-Z\[(\"]|\.\s*(?:_+|[\u2014\u2013])|\.\s*-{1,2}\s")
 
 
 def is_start(line):
@@ -242,12 +244,15 @@ def page_profile(lines):
 
 
 def find_body_start(cleaned_pages):
-    flags = []
-    for _no, lines in cleaned_pages:
-        frac, longs = page_profile(lines)
-        flags.append(longs >= 3 and (frac is None or frac < 0.5))
-    for i, f in enumerate(flags):
-        if f and (i + 1 >= len(flags) or flags[i + 1]):
+    """First page of the actual law. A contents page scores close to 1.0 (nearly every numbered
+    line is a short title), a body page rarely scores above 0.6, so: the body starts at the
+    first page that looks like prose AND is followed by a page that is clearly not contents."""
+    profiles = [page_profile(lines) for _no, lines in cleaned_pages]
+    body_like = [longs >= 3 and (frac is None or frac < 0.5) for frac, longs in profiles]
+    not_contents = [frac is None or frac < 0.75 for frac, _longs in profiles]
+
+    for i, f in enumerate(body_like):
+        if f and (i + 1 >= len(profiles) or not_contents[i + 1]):
             return i
     return 0
 
@@ -380,6 +385,10 @@ def parse_units(entries, toc):
             continue
 
         m = UNIT_START.match(s)
+        alt = False
+        if not m:
+            m = ALT_START.match(s)
+            alt = m is not None
         if m and start_form_ok(m):
             num, suf, rest = m.group(1), m.group(2), m.group(3).strip()
             nxt = entries[i + 1][1] if i + 1 < len(entries) else ""
@@ -397,7 +406,7 @@ def parse_units(entries, toc):
                         idx == pos or title_match(probe, title) or title_is_omitted(title)):
                     accepted = True
                     ptr[block] = idx + 1
-            elif accept_number(num, suf, last) and (not rest or split_heading(probe_src)[0]):
+            elif not alt and accept_number(num, suf, last) and (not rest or split_heading(probe_src)[0]):
                 # Not in the contents (or this block has none): fall back to numbering order.
                 accepted = True
 
@@ -440,7 +449,7 @@ def assemble(unit, page_notes):
     paras = []
     for _p, t in unit["lines"]:
         t = MARKER.sub("[", t)
-        t = re.sub(r"_{2,}", "\u2014", t)
+        t = re.sub(r"_+", "\u2014", t)
         if paras and not NEW_PARA.match(t):
             paras[-1] += " " + t
         else:
@@ -551,16 +560,16 @@ def build_chunks(doc_id, cfg, units, toc, page_notes, ocr_pages, source=None):
 
 
 # ----------------------------------------------------------------------------- per-document run + report
-def diagnose(key, entries, toc_block):
+def diagnose(key, entries, toc_block, raw_entries=None):
     """Say WHY a section from the contents wasn't found, quoting the line that failed."""
     mm = re.match(r"(\d+)([A-Z]*)$", key)
     num, suf = (mm.group(1), mm.group(2)) if mm else (key, "")
     core = f"{num}[\\s\\-\u2013]*{suf}" if suf else num
 
-    start_pat = re.compile(r"^" + MARK_PREFIX + core + r"\s*\.")
+    start_pat = re.compile(r"^" + MARK_PREFIX + core + r"\s*[.,]")
     for page, s in entries:
         if start_pat.match(s):
-            m = UNIT_START.match(s)
+            m = UNIT_START.match(s) or ALT_START.match(s)
             shown = s[:70]
             if not m:
                 return f"p.{page} '{shown}' -> line shape not recognised"
@@ -569,7 +578,20 @@ def diagnose(key, entries, toc_block):
             return (f"p.{page} '{shown}' -> looks like a section start but was not accepted "
                     f"(out of order, or heading differs from contents '{toc_block.get(key, '')[:40]}')")
 
-    token = re.compile(r"(?<![\d\w.])" + core + r"(?![\d\w])")
+    if raw_entries:
+        dropped = [(p, s) for p, s in raw_entries if start_pat.match(s)][:2]
+        if dropped:
+            return ("a line starting with this number is in the raw text but was DROPPED while cleaning "
+                    "(probably taken for a footnote): " + " || ".join(f"p.{p} '{s[:70]}'" for p, s in dropped))
+
+    title = norm(toc_block.get(key, ""))[:28]
+    if len(title) >= 10 and not title_is_omitted(toc_block.get(key, "")):
+        found = [(p, s) for p, s in entries if title in norm(s)][:2]
+        if found:
+            return ("the heading wording is there but the number isn't on the same line: "
+                    + " || ".join(f"p.{p} '{s[:80]}'" for p, s in found))
+
+    token = re.compile(r"(?<![\d\w.(])" + core + r"(?![\d\w)])")
     hits = [(p, s) for p, s in entries if token.search(s)][:2]
     if hits:
         return "number appears, but not as a section start: " + " || ".join(f"p.{p} '{s[:80]}'" for p, s in hits)
@@ -578,13 +600,13 @@ def diagnose(key, entries, toc_block):
 
 def parse_sources(path):
     out = {}
-    with open(path, encoding="utf-8", errors="replace") as f:
+    with open(path, encoding="utf-8-sig", errors="replace") as f:
         for line in f:
             parts = [p.strip() for p in line.split("|")]
             if len(parts) < 4 or not parts[0].lower().endswith(".pdf"):
                 continue
             date = re.search(r"\d{4}-\d{2}-\d{2}", parts[4]) if len(parts) > 4 else None
-            out[parts[0][:-4]] = {
+            out[parts[0][:-4].strip()] = {
                 "title": parts[1], "site": parts[2], "url": parts[3],
                 "downloaded": date.group(0) if date else (parts[4] if len(parts) > 4 else ""),
                 "note": parts[5] if len(parts) > 5 else "",
@@ -592,13 +614,23 @@ def parse_sources(path):
     return out
 
 
-def load_sources(pdf_dir, base):
-    for folder in (pdf_dir, base):
+def find_sources_file(pdf_dir, base):
+    tried = []
+    for folder in (pdf_dir, base, ".", os.path.dirname(os.path.abspath(base)) or "."):
+        if folder in tried:
+            continue
+        tried.append(folder)
         if os.path.isdir(folder):
-            for name in os.listdir(folder):
-                if name.lower() == "sources.txt":
-                    return parse_sources(os.path.join(folder, name))
-    return {}
+            for name in sorted(os.listdir(folder)):
+                low = name.lower()
+                if low.startswith("sources") and low.endswith(".txt"):
+                    return os.path.join(folder, name), tried
+    return None, tried
+
+
+def load_sources(pdf_dir, base):
+    path, _tried = find_sources_file(pdf_dir, base)
+    return parse_sources(path) if path else {}
 
 
 def process_doc(doc_id, base, pdf_dir, check_pdf, sources=None):
@@ -616,6 +648,7 @@ def process_doc(doc_id, base, pdf_dir, check_pdf, sources=None):
     toc_entries = [(no, l) for no, ls in cleaned[:body_idx] for l in ls]
     body_entries = [(no, l) for no, ls in cleaned[body_idx:] for l in ls]
     toc = parse_toc(toc_entries) if toc_entries else {}
+    raw_entries = [(no, l.strip()) for no, ls in pages[body_idx:] for l in ls if l.strip()]
 
     units, skipped_lines, skipped_names, subheads = parse_units(body_entries, toc)
 
@@ -632,9 +665,11 @@ def process_doc(doc_id, base, pdf_dir, check_pdf, sources=None):
         if u["block"] != "preamble":
             found[u["block"]].add(u["number"])
 
-    problems = []
+    problems, omitted_absent = [], []
     for blk, exp in toc.items():
-        missing = sorted([n for n in exp if n not in found.get(blk, set())], key=num_key)
+        all_missing = sorted([n for n in exp if n not in found.get(blk, set())], key=num_key)
+        missing = [n for n in all_missing if not title_is_omitted(exp[n])]
+        omitted_absent += [f"{n}" if blk == "main" else f"{blk} {n}" for n in all_missing if title_is_omitted(exp[n])]
         extra = sorted([n for n in found.get(blk, set()) if n not in exp], key=num_key)
         if missing or extra:
             problems.append((blk, len(exp), missing, extra))
@@ -657,6 +692,8 @@ def process_doc(doc_id, base, pdf_dir, check_pdf, sources=None):
         R.append("CHECK: no table of contents detected - cannot cross-check section numbers")
     elif not problems:
         R.append("CHECK: every section in the contents was found, and nothing extra  [OK]")
+        if omitted_absent:
+            R.append(f"note: {len(omitted_absent)} section(s) the contents list as omitted/repealed have no text in the body (fine): {omitted_absent[:20]}")
     else:
         R.append(f"CHECK: {len(problems)} block(s) disagree with the contents:")
         for blk, n, missing, extra in problems[:12]:
@@ -665,12 +702,14 @@ def process_doc(doc_id, base, pdf_dir, check_pdf, sources=None):
                 R.append(f"      MISSING from body ({len(missing)}): {missing[:30]}{' ...' if len(missing) > 30 else ''}")
                 if blk == "main":
                     first_order = next((n for n, (_p, l) in enumerate(body_entries) if is_upper_line(l) and BLOCK_HEADING.match(l)), len(body_entries))
-                    for k in missing[:8]:
-                        R.append(f"         why {k}: {diagnose(k, body_entries[:first_order], toc.get(blk, {}))}")
+                    for k in missing[:12]:
+                        R.append(f"         why {k}: {diagnose(k, body_entries[:first_order], toc.get(blk, {}), raw_entries)}")
             if extra:
                 R.append(f"      NOT in contents ({len(extra)}): {extra[:30]}{' ...' if len(extra) > 30 else ''}")
         if len(problems) > 12:
             R.append(f"   ... and {len(problems) - 12} more block(s)")
+        if omitted_absent:
+            R.append(f"note: {len(omitted_absent)} more listed as omitted/repealed in the contents have no body text (fine, not counted above): {omitted_absent[:20]}")
 
     if stats["mismatch"]:
         R.append(f"heading differs from contents in {len(stats['mismatch'])} unit(s), e.g.:")
@@ -717,11 +756,15 @@ def main():
     pdf_dir = args.pdf_dir or os.path.join(args.base, "source_pdfs")
     out_dir = os.path.join(args.base, "chunks")
 
-    sources = load_sources(pdf_dir, args.base)
+    sources_path, tried = find_sources_file(pdf_dir, args.base)
+    sources = parse_sources(sources_path) if sources_path else {}
     docs = args.docs or sorted(f[:-4] for f in os.listdir(raw_dir) if f.endswith(".txt"))
     os.makedirs(out_dir, exist_ok=True)
 
     report, all_chunks = [], []
+    report.append("source: " + (f"SOURCES file found at {sources_path} with {len(sources)} entries: {sorted(sources)}"
+                                if sources_path else f"SOURCES.txt NOT FOUND (looked in: {', '.join(tried)})"))
+    report.append("")
     for d in docs:
         try:
             chunks, lines = process_doc(d, args.base, pdf_dir, not args.no_pdf_check, sources)

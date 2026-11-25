@@ -11,6 +11,7 @@ import Button from "../components/ui/Button";
 import { useAuthRole } from "../context/AuthRoleContext";
 import { fetchScoped } from "../services/scopedQuery";
 import { CMS_URL } from "../services/cms";
+import Loading from "../components/ui/Loading";
 
 function todayKey() {
   const d = new Date();
@@ -77,9 +78,7 @@ function CourtDayPrep() {
 
   if (!loaded) {
     return (
-      <PageContainer title="Court Day Prep" subtitle="Loading...">
-        <p style={emptyText}>Loading...</p>
-      </PageContainer>
+      <PageContainer title="Court Day Prep"><Loading /></PageContainer>
     );
   }
 

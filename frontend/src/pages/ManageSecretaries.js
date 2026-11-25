@@ -11,6 +11,7 @@ import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
+import { confirmDialog } from "../components/Notifications";
 
 const COURTS = [
   { key: "civil", label: "Civil" },
@@ -92,7 +93,7 @@ function ManageSecretaries() {
   };
 
   const handleDelete = async (secretary) => {
-    if (!window.confirm(`Remove ${secretary.name}? This permanently deletes their login.`)) return;
+    if (!await confirmDialog(`Remove ${secretary.name}? This permanently deletes their login.`)) return;
 
     setBusyUid(secretary.uid);
     try {

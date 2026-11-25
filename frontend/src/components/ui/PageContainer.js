@@ -3,22 +3,22 @@ import { colors, font } from "../../styles/theme";
 
 function PageContainer({ eyebrow, title, subtitle, action, children }) {
   return (
-    <div style={page}>
-      <div style={header}>
-        <div>
+    <div className="am-page" style={page}>
+      <div className="am-page-header" style={header}>
+        <div style={{ minWidth: 0 }}>
           {eyebrow && <div style={eyebrowStyle}>{eyebrow}</div>}
-          {title && <h1 style={titleStyle}>{title}</h1>}
+          {title && <h1 className="am-page-title" style={titleStyle}>{title}</h1>}
           {subtitle && <p style={subtitleStyle}>{subtitle}</p>}
         </div>
-        {action && <div>{action}</div>}
+        {action && <div className="am-page-action">{action}</div>}
       </div>
       {children}
     </div>
   );
 }
 
+// Note: page padding now lives in ui.css (.am-page) so it can shrink on phones.
 const page = {
-  padding: "28px 32px 60px",
   background: colors.paper,
   minHeight: "100vh",
   fontFamily: font.body,
@@ -48,6 +48,7 @@ const titleStyle = {
   fontWeight: 600,
   color: colors.ink,
   margin: 0,
+  overflowWrap: "anywhere",
 };
 
 const subtitleStyle = {

@@ -100,6 +100,7 @@ def create_secretary(lawyer_uid):
             email=email,
             password=temp_password,
             display_name=name,
+            email_verified=True,
         )
     except EmailAlreadyExistsError:
         return _err("An account with this email already exists", 409)

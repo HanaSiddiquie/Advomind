@@ -16,7 +16,19 @@ function IntroPage() {
   }, [navigate]);
 
   return (
-    <div style={container}>
+        <div style={{ ...container, cursor: "pointer" }} onClick={() => navigate("/auth")}>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); navigate("/auth"); }}
+        style={{
+          position: "absolute", top: 18, right: 18,
+          background: "transparent", color: "#B7B8BC",
+          border: "1px solid #4A4A4E", borderRadius: 999,
+          padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+        }}
+      >
+        Skip ›
+      </button>
       <div style={logoBox}>
         <img src={logo} alt="Advomind Logo" style={logoStyle} />
       </div>

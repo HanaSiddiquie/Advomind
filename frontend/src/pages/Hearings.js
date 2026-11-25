@@ -15,15 +15,23 @@ import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
 import Modal from "../components/ui/Modal";
+import Loading from "../components/ui/Loading";
+import { toast } from "../components/Notifications";
+import { todayKey, tomorrowKey, formatDate } from "../utils/dates";
 import { useAuthRole } from "../context/AuthRoleContext";
 import { fetchScoped } from "../services/scopedQuery";
 import { CMS_URL } from "../services/cms";
+import EmptyState from "../components/ui/EmptyState";
+import VoiceWrap from "../components/ui/VoiceWrap";
 
 function Hearings() {
   const [hearings, setHearings] = useState([]);
   const [cases, setCases] = useState([]);
   const [clients, setClients] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [search, setSearch] = useState("");
+  const [when, setWhen] = useState("all");
 
   const { ownerId: userId, user, isLawyer } = useAuthRole();
   const courtType = localStorage.getItem("court");
@@ -64,6 +72,8 @@ function Hearings() {
 
     } catch (err) {
       console.log(err);
+    } finally {
+      setLoaded(true);
     }
   };
 
@@ -107,6 +117,7 @@ function Hearings() {
     setForm({ case_id: "", date: "", event: "", notes: "" });
     setShowAddModal(false);
     fetchData();
+    toast("Hearing scheduled", "success");
   };
 
   // ================= HELPERS =================
@@ -117,11 +128,29 @@ function Hearings() {
     return clientMap[clientId]?.name || "Unknown Client";
   };
 
-  const sortedHearings = useMemo(() => {
-    return [...hearings].sort(
-      (a, b) => new Date(a.date) - new Date(b.date)
-    );
-  }, [hearings]);
+  const groups = useMemo(() => {
+    const today = todayKey();
+    const tomorrow = tomorrowKey();
+    const q = search.trim().toLowerCase();
+    const dateOf = (h) => String(h.date || "").slice(0, 10);
+
+    const list = hearings.filter(h => {
+      if (when === "upcoming" && dateOf(h) < today) return false;
+      if (when === "past" && dateOf(h) >= today) return false;
+      if (!q) return true;
+      const c = caseMap[h.case_id];
+      return [h.event, h.notes, h.date, c?.title, clientMap[c?.client_id]?.name]
+        .some(v => String(v || "").toLowerCase().includes(q));
+    });
+
+    const asc = (a, b) => dateOf(a).localeCompare(dateOf(b));
+    return [
+      { key: "today", title: "Today", tone: "accent", items: list.filter(h => dateOf(h) === today) },
+      { key: "tomorrow", title: "Tomorrow", tone: "warn", items: list.filter(h => dateOf(h) === tomorrow) },
+      { key: "upcoming", title: "Upcoming", tone: "dark", items: list.filter(h => dateOf(h) > tomorrow).sort(asc) },
+      { key: "past", title: "Past", tone: "neutral", past: true, items: list.filter(h => dateOf(h) < today).sort((a, b) => asc(b, a)) },
+    ].filter(g => g.items.length > 0);
+  }, [hearings, search, when, caseMap, clientMap]);
 
   // ================= UI =================
   return (
@@ -175,19 +204,22 @@ function Hearings() {
 
         <Input
           label="Event"
+                    voice
           placeholder="e.g. First hearing"
           value={form.event}
           onChange={(e) => setForm({ ...form, event: e.target.value })}
         />
 
         <label style={selectLabel}>Notes</label>
-        <textarea
-          className="am-input"
-          style={textareaStyle}
-          placeholder="Notes"
-          value={form.notes}
-          onChange={(e) => setForm({ ...form, notes: e.target.value })}
-        />
+                <VoiceWrap>
+          <textarea
+            className="am-input"
+            style={textareaStyle}
+            placeholder="Notes"
+            value={form.notes}
+            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+          />
+        </VoiceWrap>
 
         <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
           <Button onClick={handleSubmit} style={{ flex: 1 }}>Add Hearing</Button>
@@ -197,30 +229,78 @@ function Hearings() {
         </div>
       </Modal>
 
-      {/* TIMELINE */}
-      <div style={timeline}>
-        {sortedHearings.length === 0 ? (
-          <p style={emptyText}>No hearings scheduled yet — click "+ Add Hearing" above to schedule one.</p>
-        ) : (
-          sortedHearings.map(h => (
-            <div
-              key={h.id}
-              className="am-card-hover"
-              style={card}
-              onClick={() => navigate(`/hearings/${h.id}`)}
-            >
-              <Badge tone="dark">{h.date}</Badge>
-
-              <h3 style={eventTitle}>{h.event}</h3>
-
-              <div style={meta}>Case: {getCaseTitle(h.case_id)}</div>
-              <div style={meta}>Client: {getClientName(h.case_id)}</div>
-
-              {h.notes && <div style={notes}>{h.notes}</div>}
-            </div>
-          ))
-        )}
+      {/* SEARCH + FILTER */}
+      <div style={filterRow}>
+        <div style={{ flex: "1 1 240px" }}>
+          <Input
+            type="search"
+                        voice
+            placeholder="Search by event, case, client or date…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <select
+          className="am-input"
+          aria-label="Filter by date"
+          style={{ ...selectStyle, width: "auto", minWidth: 160 }}
+          value={when}
+          onChange={(e) => setWhen(e.target.value)}
+        >
+          <option value="all">All hearings</option>
+          <option value="upcoming">Today &amp; upcoming</option>
+          <option value="past">Past only</option>
+        </select>
       </div>
+
+      {/* TIMELINE */}
+      {!loaded ? (
+        <Loading />
+      ) : hearings.length === 0 ? (
+                <EmptyState
+          icon="🗓️"
+          title="No hearings scheduled"
+          text="Schedule a hearing and it will show up here, grouped by Today, Tomorrow and Upcoming."
+          action="+ Add Hearing"
+          onAction={() => setShowAddModal(true)}
+        />
+      ) : groups.length === 0 ? (
+        <p style={emptyText}>No hearings match your search or filter.</p>
+      ) : (
+        groups.map(g => (
+          <div key={g.key} style={{ marginBottom: 22 }}>
+            <h3 style={groupTitle}>
+              {g.title} <span style={groupCount}>{g.items.length}</span>
+            </h3>
+            <div style={timeline}>
+              {g.items.map(h => (
+                <div
+                  key={h.id}
+                  role="link"
+                  tabIndex={0}
+                  className="am-card-hover"
+                  style={{ ...card, ...(g.past ? { opacity: 0.65, borderLeftColor: colors.slate } : {}) }}
+                  onClick={() => navigate(`/hearings/${h.id}`)}
+                  onKeyDown={(e) => { if (e.key === "Enter") navigate(`/hearings/${h.id}`); }}
+                >
+                  <Badge tone={g.tone}>
+                    {g.key === "today" || g.key === "tomorrow"
+                      ? `${g.title} · ${formatDate(h.date)}`
+                      : formatDate(h.date)}
+                  </Badge>
+
+                  <h3 style={eventTitle}>{h.event}</h3>
+
+                  <div style={meta}>Case: {getCaseTitle(h.case_id)}</div>
+                  <div style={meta}>Client: {getClientName(h.case_id)}</div>
+
+                  {h.notes && <div style={notes}>{h.notes}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
+      )}
     </PageContainer>
   );
 }
@@ -267,6 +347,29 @@ const modalHint = {
   padding: "10px 12px",
   marginBottom: 16,
   lineHeight: 1.45,
+};
+
+const filterRow = {
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap",
+  alignItems: "flex-start",
+};
+
+const groupTitle = {
+  fontFamily: font.display,
+  fontSize: "15px",
+  fontWeight: 600,
+  color: colors.ink,
+  margin: "8px 0 12px",
+};
+
+const groupCount = {
+  fontFamily: font.body,
+  fontSize: "12px",
+  fontWeight: 600,
+  color: colors.slate,
+  marginLeft: 4,
 };
 
 const timeline = {

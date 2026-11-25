@@ -17,12 +17,18 @@ import Button from "../components/ui/Button";
 import Modal from "../components/ui/Modal";
 import { useAuthRole } from "../context/AuthRoleContext";
 import { cascadeDeleteClient } from "../services/cascadeDelete";
+import { confirmDialog } from "../components/Notifications";
+import { toast } from "../components/Notifications";
+import Loading from "../components/ui/Loading";
+import MoreMenu from "../components/ui/MoreMenu";
+import EmptyState from "../components/ui/EmptyState";
 
 function Clients() {
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState("");
   const [deletingId, setDeletingId] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const { ownerId: userId, user, canDelete } = useAuthRole();
 
   const navigate = useNavigate();
@@ -46,6 +52,7 @@ function Clients() {
     const snap = await getDocs(q);
 
     setClients(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    setLoaded(true);
   };
 
   useEffect(() => {
@@ -73,13 +80,15 @@ function Clients() {
     setForm({ name: "", cnic: "", phone: "" });
     setShowAddModal(false);
     fetchClients();
+    toast("Client created", "success");
   };
 
   // ================= DELETE (cascades to cases, hearings, notes, files, billing) =================
   const handleDelete = async (id, name) => {
-    const confirmed = window.confirm(
+    const confirmed = await confirmDialog(
       `Delete ${name || "this client"}? This will also permanently delete every case, hearing, ` +
       `note, file, and billing record attached to them (active and archived). This cannot be undone.`
+          , { danger: true }
     );
     if (!confirmed) return;
 
@@ -89,7 +98,7 @@ function Clients() {
       const parts = [];
       if (result.deletedCases) parts.push(`${result.deletedCases} case(s)`);
       if (result.deletedArchivedCases) parts.push(`${result.deletedArchivedCases} archived case(s)`);
-      if (parts.length) alert(`Client deleted, along with ${parts.join(" and ")}.`);
+            toast(parts.length ? `Client deleted, along with ${parts.join(" and ")}.` : "Client deleted", "success");
     } catch (err) {
       console.error(err);
       alert("Something went wrong deleting this client. Some related records may remain — please try again.");
@@ -121,6 +130,7 @@ function Clients() {
         title="Add Client"
       >
         <Input
+                    voice
           placeholder="Full name"
           label="Name"
           value={form.name}
@@ -151,6 +161,7 @@ function Clients() {
 
       {/* SEARCH */}
       <Input
+                voice
         placeholder="Search by name or CNIC…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
@@ -159,39 +170,46 @@ function Clients() {
 
       {/* LIST */}
       <div style={grid}>
-        {clients.length === 0 ? (
-          <p style={emptyText}>No clients yet — click "+ Add Client" above to create one.</p>
+                {!loaded ? (
+          <Loading />
+        ) : clients.length === 0 ? (
+                    <EmptyState
+            icon="👤"
+            title="No clients yet"
+            text="Add your first client to start creating cases and scheduling hearings."
+            action="+ Add Client"
+            onAction={() => setShowAddModal(true)}
+          />
         ) : filteredClients.length === 0 ? (
           <p style={emptyText}>No clients match your search</p>
         ) : (
           filteredClients.map(c => (
-            <Card
-              key={c.id}
-              hoverable
-              onClick={() => navigate(`/clients/${c.id}`)}
-              style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}
-            >
-
-              <div>
-                <h3 style={clientName}>{c.name}</h3>
-                <p style={meta}>CNIC: {c.cnic}</p>
-                {c.phone && <p style={meta}>{c.phone}</p>}
-              </div>
-
-              {canDelete && (
-                <Button
-                  variant="danger"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(c.id, c.name);
-                  }}
-                  disabled={deletingId === c.id}
-                  full
-                  style={{ marginTop: 14 }}
+                        <Card key={c.id} hoverable>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                <div
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => navigate(`/clients/${c.id}`)}
+                  onKeyDown={(e) => { if (e.key === "Enter") navigate(`/clients/${c.id}`); }}
+                  style={{ cursor: "pointer", flex: 1, minWidth: 0 }}
                 >
-                  {deletingId === c.id ? "Deleting…" : "Delete"}
-                </Button>
-              )}
+                  <h3 style={clientName}>{c.name}</h3>
+                  <p style={meta}>CNIC: {c.cnic}</p>
+                  {c.phone && <p style={meta}>{c.phone}</p>}
+                </div>
+
+                {canDelete && (
+                  <MoreMenu
+                    items={[
+                      {
+                        label: deletingId === c.id ? "Deleting…" : "Delete client…",
+                        danger: true,
+                        onClick: () => handleDelete(c.id, c.name),
+                      },
+                    ]}
+                  />
+                )}
+              </div>
             </Card>
           ))
         )}

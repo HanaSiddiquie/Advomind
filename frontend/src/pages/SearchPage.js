@@ -10,6 +10,9 @@ import Input from "../components/ui/Input";
 import Badge from "../components/ui/Badge";
 import { useAuthRole } from "../context/AuthRoleContext";
 import { fetchScoped } from "../services/scopedQuery";
+import Loading from "../components/ui/Loading";
+import { formatDate } from "../utils/dates";
+import { classLabel, classTone } from "../utils/caseClass";
 
 function includesTerm(value, term) {
   return (value || "").toString().toLowerCase().includes(term);
@@ -69,7 +72,7 @@ function SearchPage() {
   const matchedCases = useMemo(() => {
     if (!q) return [];
     return cases.filter(c =>
-      includesTerm(c.title, q) || includesTerm(c.description, q)
+            includesTerm(c.title, q) || includesTerm(c.description, q) || includesTerm(classLabel(c.case_class), q)
     );
   }, [cases, q]);
 
@@ -100,7 +103,7 @@ function SearchPage() {
         style={{ marginBottom: 22 }}
       />
 
-      {!loaded && <p style={emptyText}>Loading...</p>}
+      {!loaded && <Loading />}
 
       {loaded && !q && (
         <p style={emptyText}>Type at least one character to search.</p>
@@ -132,7 +135,10 @@ function SearchPage() {
           <div style={grid}>
             {matchedCases.map(c => (
               <Card key={c.id} hoverable onClick={() => navigate(`/cases/${c.id}`)}>
-                <Badge tone="dark">Case</Badge>
+                                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <Badge tone="dark">Case</Badge>
+                  <Badge tone={classTone(c.case_class)}>{classLabel(c.case_class)}</Badge>
+                </div>
                 <div style={resultTitle}>{c.title}</div>
                 {c.description ? <div style={resultMeta}>{c.description.slice(0, 80)}</div> : null}
               </Card>
@@ -150,7 +156,7 @@ function SearchPage() {
                 <Badge tone="success">Hearing</Badge>
                 <div style={resultTitle}>{h.event}</div>
                 <div style={resultMeta}>
-                  {h.date} - {caseMap[h.case_id] ? caseMap[h.case_id].title : "Unknown case"}
+                  {formatDate(h.date)} - {caseMap[h.case_id] ? caseMap[h.case_id].title : "Unknown case"}
                 </div>
               </Card>
             ))}

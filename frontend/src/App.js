@@ -27,6 +27,10 @@ import Diary from "./pages/Diary";
 import ManageSecretaries from "./pages/ManageSecretaries";
 import SearchPage from "./pages/SearchPage";
 import NotificationSetup from "./components/NotificationSetup";
+import Notifications from "./components/Notifications";
+import Loading from "./components/ui/Loading";
+import AdvoChat from "./pages/AdvoChat";
+import OutstandingPayments from "./pages/OutstandingPayments";
 
 // Shown instead of redirecting when we can't resolve a role — redirecting
 // here would just bounce back and forth with the Auth page forever.
@@ -58,7 +62,7 @@ function Protected({ children, requireCourt = true, lawyerOnly = false }) {
   const { user, role, isDisabled, loading } = useAuthRole();
   const court = localStorage.getItem("court");
 
-  if (loading) return <p>Loading...</p>;
+  if (loading) return <Loading full />;
   if (!user) return <Navigate to="/auth" replace />;
 
   if (isDisabled) {
@@ -90,7 +94,7 @@ function Protected({ children, requireCourt = true, lawyerOnly = false }) {
 // =====================
 function PublicRoute({ children }) {
   const { user, role, loading } = useAuthRole();
-  if (loading) return <p>Loading...</p>;
+  if (loading) return <Loading full />;
   if (user && role) return <Navigate to="/court-selector" replace />;
   if (user && !role) return <NoProfileScreen />;
   return children;
@@ -102,7 +106,7 @@ function PublicRoute({ children }) {
 function AppRoutes() {
   const { user, role, loading } = useAuthRole();
 
-  if (loading) return <p>Loading...</p>;
+  if (loading) return <Loading full />;
 
   return (
     <Routes>
@@ -153,7 +157,9 @@ function AppRoutes() {
       <Route path="/archive" element={<Protected><ArchivePage /></Protected>} />
       <Route path="/diary" element={<Protected><Diary /></Protected>} />
       <Route path="/search" element={<Protected><SearchPage /></Protected>} />
+      <Route path="/advochat" element={<Protected><AdvoChat /></Protected>} />
       <Route path="/court-day-prep" element={<Protected><CourtDayPrep /></Protected>} />
+      <Route path="/outstanding" element={<Protected><OutstandingPayments /></Protected>} />
 
       {/* LAWYER-ONLY */}
       <Route
@@ -174,6 +180,7 @@ export default function App() {
       <AuthRoleProvider>
         <AppRoutes />
       </AuthRoleProvider>
+      <Notifications />
     </BrowserRouter>
   );
 }

@@ -60,7 +60,9 @@ function CourtSelector() {
 /* ================= STYLES ================= */
 
 const container = {
-  height: "100vh",
+  minHeight: "100vh",
+  padding: "16px",
+  boxSizing: "border-box",
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
@@ -71,7 +73,7 @@ const container = {
 const box = {
   textAlign: "center",
   background: colors.surface,
-  padding: "44px 48px",
+  padding: "clamp(24px, 6vw, 44px) clamp(20px, 6vw, 48px)",
   borderRadius: radius.lg,
   boxShadow: shadow.lg,
   border: `1px solid ${colors.hairline}`,

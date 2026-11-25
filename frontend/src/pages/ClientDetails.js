@@ -18,6 +18,10 @@ import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
 import { useAuthRole } from "../context/AuthRoleContext";
 import { fetchScoped } from "../services/scopedQuery";
+import Loading from "../components/ui/Loading";
+import { toast } from "../components/Notifications";
+import { formatDate } from "../utils/dates";
+import VoiceWrap from "../components/ui/VoiceWrap";
 
 function ClientDetails() {
   const { id } = useParams();
@@ -112,9 +116,15 @@ function ClientDetails() {
   }, [id, userId, court, isLawyer]);
 
   /* ================= UPDATE CLIENT ================= */
-  const updateClient = async () => {
-    await updateDoc(doc(db, "users", userId, "clients", id), form);
-    fetchClient(userId);
+    const updateClient = async () => {
+    try {
+      await updateDoc(doc(db, "users", userId, "clients", id), form);
+      fetchClient(userId);
+      toast("Client details saved", "success");
+    } catch (err) {
+      console.error(err);
+      toast("Couldn't save client details. Please try again.", "error");
+    }
   };
 
   /* ================= ADD CASE ================= */
@@ -133,11 +143,12 @@ function ClientDetails() {
     });
 
     setCaseForm({ title: "", description: "" });
+    toast("Case created", "success");
     fetchCases(userId);
   };
 
   /* ================= LOADING ================= */
-  if (loading) return <PageContainer title="Client Dashboard"><p style={emptyText}>Loading…</p></PageContainer>;
+  if (loading) return <PageContainer title="Client Dashboard"><Loading /></PageContainer>;
   if (!client) return <PageContainer title="Client Dashboard"><p style={emptyText}>Client not found</p></PageContainer>;
 
   const clientCaseIds = cases.map(c => c.id);
@@ -156,6 +167,7 @@ function ClientDetails() {
 
           <Input label="Full Name" value={form.name}
             onChange={e => setForm({ ...form, name: e.target.value })}
+                        voice
             placeholder="Full name"
           />
 
@@ -166,6 +178,7 @@ function ClientDetails() {
 
           <Input label="Address" value={form.address}
             onChange={e => setForm({ ...form, address: e.target.value })}
+                        voice
             placeholder="Address"
           />
 
@@ -186,17 +199,20 @@ function ClientDetails() {
           <Input label="Case Title"
             value={caseForm.title}
             onChange={e => setCaseForm({ ...caseForm, title: e.target.value })}
+                        voice
             placeholder="Case title"
           />
 
           <label style={selectLabel}>Description</label>
-          <textarea
-            className="am-input"
-            style={textareaStyle}
-            value={caseForm.description}
-            onChange={e => setCaseForm({ ...caseForm, description: e.target.value })}
-            placeholder="Case description"
-          />
+                    <VoiceWrap>
+            <textarea
+              className="am-input"
+              style={textareaStyle}
+              value={caseForm.description}
+              onChange={e => setCaseForm({ ...caseForm, description: e.target.value })}
+              placeholder="Case description"
+            />
+          </VoiceWrap>
 
           <Button onClick={addCase} full>
             Create Case
@@ -239,7 +255,7 @@ function ClientDetails() {
             {clientHearings.map(h => (
               <div key={h.id} style={miniCard}>
                 <h4 style={miniCardTitle}>{h.event}</h4>
-                <p style={miniCardMeta}>{h.date}</p>
+                <p style={miniCardMeta}>{formatDate(h.date)}</p>
               </div>
             ))}
           </div>

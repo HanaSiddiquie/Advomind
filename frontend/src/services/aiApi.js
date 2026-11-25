@@ -1,7 +1,7 @@
 // frontend/src/services/aiApi.js
 import { auth } from "../firebase";
 
-const BASE_URL = "http://127.0.0.1:5000";
+const BASE_URL = process.env.REACT_APP_API_URL ?? "http://127.0.0.1:5000";
 
 export async function summarizeCase(caseId) {
   const user = auth.currentUser;

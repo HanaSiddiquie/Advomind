@@ -1,9 +1,8 @@
 // frontend/src/components/Navbar.js
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth } from "../firebase";
-import { colors, font } from "../styles/theme";
-import Button from "./ui/Button";
 import { useAuthRole } from "../context/AuthRoleContext";
 
 const BASE_LINKS = [
@@ -14,6 +13,7 @@ const BASE_LINKS = [
   { to: "/diary", label: "Diary" },
   { to: "/archive", label: "Archive" },
   { to: "/search", label: "Search" },
+  { to: "/advochat", label: "AdvoChat" },
   { to: "/court-day-prep", label: "Court Day Prep" },
 ];
 
@@ -23,10 +23,48 @@ function Navbar() {
   const court = localStorage.getItem("court");
   const { isLawyer, profile } = useAuthRole();
   const displayName = profile?.name || profile?.email || "User";
+  const initial = displayName.trim().charAt(0).toUpperCase() || "?";
 
-  const NAV_LINKS = isLawyer
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [acctOpen, setAcctOpen] = useState(false);
+  const navRef = useRef(null);
+  const acctRef = useRef(null);
+
+  const links = isLawyer
     ? [...BASE_LINKS, { to: "/secretaries", label: "Secretaries" }]
     : BASE_LINKS;
+
+  const isActive = (to) =>
+    location.pathname === to || location.pathname.startsWith(to + "/");
+
+  // Close both menus whenever the page changes
+  useEffect(() => {
+    setMenuOpen(false);
+    setAcctOpen(false);
+  }, [location.pathname]);
+
+  // Close on outside tap / Escape
+  useEffect(() => {
+    if (!menuOpen && !acctOpen) return;
+
+    const onDown = (e) => {
+      if (acctRef.current && !acctRef.current.contains(e.target)) setAcctOpen(false);
+      if (navRef.current && !navRef.current.contains(e.target)) setMenuOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        setAcctOpen(false);
+        setMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen, acctOpen]);
 
   const logout = async () => {
     await signOut(auth);
@@ -35,126 +73,81 @@ function Navbar() {
   };
 
   return (
-    <div style={nav}>
-      {/* LEFT: BRAND */}
-      <div style={left}>
-        <h2 style={brand}>⚖ ADVOMIND</h2>
-        <span style={nameTag}>{displayName}</span>
-        {court && <span style={courtTag}>{court.toUpperCase()} COURT</span>}
-        <span style={roleTag}>{isLawyer ? "Lawyer" : "Secretary"}</span>
-      </div>
+    <header className="am-nav" ref={navRef}>
+      <div className="am-nav-bar">
+        <button
+          type="button"
+          className="am-nav-burger"
+          aria-label="Menu"
+          aria-expanded={menuOpen}
+          onClick={() => {
+            setMenuOpen((o) => !o);
+            setAcctOpen(false);
+          }}
+        >
+          {menuOpen ? "✕" : "☰"}
+        </button>
 
-      {/* CENTER LINKS */}
-      <div style={center}>
-        {NAV_LINKS.map(({ to, label }) => (
-          <Link
-            key={to}
-            to={to}
-            className={`am-nav-link ${location.pathname === to ? "active" : ""}`}
-            style={link}
-          >
-            {label}
-          </Link>
-        ))}
-      </div>
+        <Link to="/dashboard" className="am-nav-brand">⚖ ADVOMIND</Link>
 
-      {/* RIGHT */}
-      <div style={right}>
-        <Button variant="secondary" onClick={() => navigate("/court-selector")} style={switchBtnStyle}>
-          Switch Court
-        </Button>
-        <Button variant="danger" onClick={logout}>
-          Logout
-        </Button>
+        <nav className={`am-nav-links${menuOpen ? " open" : ""}`} aria-label="Main">
+          {links.map(({ to, label }) => (
+            <Link
+              key={to}
+              to={to}
+              className={`am-nav-link${isActive(to) ? " active" : ""}`}
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="am-nav-right">
+          {court && (
+            <span className="am-nav-court">
+              {court.toUpperCase()}
+              <span className="am-hide-sm"> COURT</span>
+            </span>
+          )}
+
+          <div className="am-acct" ref={acctRef}>
+            <button
+              type="button"
+              className="am-acct-btn"
+              aria-haspopup="menu"
+              aria-expanded={acctOpen}
+              onClick={() => {
+                setAcctOpen((o) => !o);
+                setMenuOpen(false);
+              }}
+            >
+              <span className="am-avatar">{initial}</span>
+              <span className="am-acct-name">{displayName}</span>
+              <span aria-hidden="true" className="am-caret">▾</span>
+            </button>
+
+            {acctOpen && (
+              <div className="am-acct-menu" role="menu">
+                <div className="am-acct-head">
+                  <strong>{displayName}</strong>
+                  <span>
+                    {isLawyer ? "Lawyer" : "Secretary"}
+                    {court ? ` · ${court.charAt(0).toUpperCase() + court.slice(1)} court` : ""}
+                  </span>
+                </div>
+                <button type="button" role="menuitem" onClick={() => navigate("/court-selector")}>
+                  Switch Court
+                </button>
+                <button type="button" role="menuitem" className="danger" onClick={logout}>
+                  Logout
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
-    </div>
+    </header>
   );
 }
-
-/* ================= STYLES ================= */
-
-const nav = {
-  position: "sticky",
-  top: 0,
-  zIndex: 1000,
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  padding: "14px 28px",
-  background: colors.ink,
-  color: colors.white,
-  fontFamily: font.body,
-  flexWrap: "wrap",
-  gap: "12px",
-  borderBottom: `1px solid #000`,
-};
-
-const left = {
-  display: "flex",
-  alignItems: "center",
-  gap: "12px",
-};
-
-const brand = {
-  margin: 0,
-  fontFamily: font.display,
-  fontSize: "18px",
-  letterSpacing: "0.03em",
-  color: colors.white,
-};
-
-const center = {
-  display: "flex",
-  gap: "6px",
-  flexWrap: "wrap",
-};
-
-const right = {
-  display: "flex",
-  gap: "10px",
-};
-
-const link = {
-  color: "#D6D7DA",
-  textDecoration: "none",
-  padding: "8px 14px",
-  borderRadius: "6px",
-  fontSize: "13px",
-  fontWeight: 600,
-};
-
-const switchBtnStyle = {
-  background: "transparent",
-  color: colors.white,
-  borderColor: "#4A4A4E",
-};
-
-const courtTag = {
-  fontSize: "11px",
-  fontWeight: 700,
-  letterSpacing: "0.05em",
-  padding: "5px 10px",
-  background: colors.accent,
-  borderRadius: "6px",
-  color: colors.white,
-};
-
-const roleTag = {
-  fontSize: "11px",
-  fontWeight: 700,
-  letterSpacing: "0.05em",
-  padding: "5px 10px",
-  background: "transparent",
-  border: "1px solid #4A4A4E",
-  borderRadius: "6px",
-  color: "#D6D7DA",
-};
-
-const nameTag = {
-  fontSize: "13px",
-  fontWeight: 600,
-  color: colors.white,
-  paddingRight: "4px",
-};
 
 export default Navbar;

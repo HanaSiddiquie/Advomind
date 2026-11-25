@@ -27,7 +27,6 @@ import PageContainer from "../components/ui/PageContainer";
 import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
-import Badge from "../components/ui/Badge";
 import { summarizeCase } from "../services/aiApi";
 import { useAuthRole } from "../context/AuthRoleContext";
 import { CMS_URL } from "../services/cms";
@@ -35,8 +34,15 @@ import { cascadeDeleteArchivedCase } from "../services/cascadeDelete";
 import { computeItemAmount, computeTotals, formatCurrency } from "../services/billing";
 import Modal from "../components/ui/Modal";
 import { extractFileText } from "../services/ocrApi";
+import Loading from "../components/ui/Loading";
+import { confirmDialog, toast } from "../components/Notifications";
+import Badge, { statusTone } from "../components/ui/Badge";
+import { todayKey, formatDate } from "../utils/dates";
+import ChatPanel from "../components/ChatPanel";
+import { CASE_CLASSES, classLabel, classTone } from "../utils/caseClass";
+import VoiceWrap from "../components/ui/VoiceWrap";
 
-const TABS = ["view", "summary", "details", "diary", "hearings", "billing", "files"];
+const TABS = ["view", "summary", "details", "diary", "hearings", "billing", "files", "advochat"];
 
 function CaseDetails() {
   const { id } = useParams();
@@ -64,11 +70,12 @@ function CaseDetails() {
   const [extractingFileId, setExtractingFileId] = useState(null);
   const [viewingFile, setViewingFile] = useState(null);
 
-  const [tab, setTab] = useState("view");
+  const [tab, setTab] = useState("summary");
 
   const [form, setForm] = useState({
     title: "",
     description: "",
+    case_class: "",
     status: ""
   });
 
@@ -137,6 +144,7 @@ function CaseDetails() {
         setForm({
           title: data.title || "",
           description: data.description || "",
+          case_class: data.case_class || "",
           status: data.status || ""
         });
 
@@ -217,7 +225,7 @@ function CaseDetails() {
   const permanentlyDeleteThisCase = async () => {
     if (!archivedDoc || !userId) return;
 
-    if (!window.confirm("Permanently delete this archived case and all its hearings, notes, and files? This cannot be undone.")) return;
+    if (!await confirmDialog("Permanently delete this archived case and all its hearings, notes, and files? This cannot be undone.")) return;
 
     try {
       await cascadeDeleteArchivedCase({
@@ -380,6 +388,7 @@ function CaseDetails() {
 
       await updateDoc(caseRef, form);
       fetchCase(userId);
+      toast("Case details saved", "success");
 
     } catch (err) {
       console.error(err);
@@ -393,6 +402,7 @@ function CaseDetails() {
       assignedTo: newAssignee || null
     });
     fetchCase(userId);
+    toast("Assignment updated", "success");
   };
 
   /* ================= ADD HEARING ================= */
@@ -410,6 +420,7 @@ function CaseDetails() {
 
     setHearingForm({ date: "", event: "", notes: "" });
     fetchHearings(userId);
+    toast("Hearing scheduled", "success");
   };
 
   /* ================= BILLING HANDLERS ================= */
@@ -446,12 +457,14 @@ function CaseDetails() {
 
     setBillingForm({ type: "fee", description: "", amount: "", hours: "", rate: "", date: "" });
     fetchBillingItems(userId);
+    toast("Billing item added", "success");
   };
 
   const deleteBillingItem = async (itemId) => {
-    if (!window.confirm("Delete this billing item?")) return;
+    if (!await confirmDialog("Delete this billing item?")) return;
     await deleteDoc(doc(db, "billingItems", itemId));
     fetchBillingItems(userId);
+    toast("Billing item deleted", "success");
   };
 
   const addPayment = async () => {
@@ -476,12 +489,14 @@ function CaseDetails() {
 
     setPaymentForm({ amount: "", method: "Cash", date: "", notes: "" });
     fetchPayments(userId);
+    toast("Payment recorded", "success");
   };
 
   const deletePayment = async (paymentId) => {
-    if (!window.confirm("Delete this payment record?")) return;
+    if (!await confirmDialog("Delete this payment record?")) return;
     await deleteDoc(doc(db, "payments", paymentId));
     fetchPayments(userId);
+    toast("Payment deleted", "success");
   };
 
   const billingTotals = useMemo(
@@ -561,14 +576,16 @@ function CaseDetails() {
 
     closeNoteEditor();
     fetchDiaryNotes(userId);
+    toast("Note saved", "success");
   };
 
   const deleteNote = async (noteId) => {
-    if (!window.confirm("Delete this note?")) return;
+    if (!await confirmDialog("Delete this note?")) return;
 
     await deleteDoc(doc(db, "diaryNotes", noteId));
     closeNoteEditor();
     fetchDiaryNotes(userId);
+    toast("Note deleted", "success");
   };
 
   /* ================= DETAIL NOTE HANDLERS ================= */
@@ -615,14 +632,16 @@ function CaseDetails() {
 
     closeDetailNoteEditor();
     fetchDetailNotes(userId);
+    toast("Note saved", "success");
   };
 
   const deleteDetailNote = async (noteId) => {
-    if (!window.confirm("Delete this note?")) return;
+    if (!await confirmDialog("Delete this note?")) return;
 
     await deleteDoc(doc(db, "detailsNotes", noteId));
     closeDetailNoteEditor();
     fetchDetailNotes(userId);
+    toast("Note deleted", "success");
   };
 
   /* ================= FILE UPLOAD ================= */
@@ -655,6 +674,7 @@ function CaseDetails() {
 
       setFile(null);
       await fetchFiles(userId);
+      toast("File uploaded", "success");
 
     } catch (err) {
       console.error(err);
@@ -665,18 +685,22 @@ function CaseDetails() {
   };
 
   /* ================= DELETE FILE ================= */
-  const deleteFile = async (f) => {
+    const deleteFile = async (f) => {
+    const ok = await confirmDialog(`Delete "${f.name}"? This can't be undone.`, { danger: true });
+    if (!ok) return;
     try {
       if (f.storagePath) {
         await deleteObject(ref(storage, f.storagePath));
       }
 
-      await deleteDoc(doc(db, "files", f.id));
+            await deleteDoc(doc(db, "files", f.id));
 
       fetchFiles(userId);
+      toast("File deleted", "success");
 
     } catch (err) {
       console.error(err);
+      toast("Couldn't delete this file. Please try again.", "error");
     }
   };
 
@@ -687,8 +711,10 @@ const runExtraction = async (f, forceOcr = false) => {
   try {
     const result = await extractFileText(f.id, forceOcr);
     await fetchFiles(userId);
-    if (result.warnings && result.warnings.length > 0) {
+        if (result.warnings && result.warnings.length > 0) {
       alert("Text extracted, but please note:\n\n" + result.warnings.join("\n\n"));
+    } else {
+      toast("Text extracted", "success");
     }
   } catch (err) {
     console.error(err);
@@ -714,7 +740,7 @@ const isOldWordFile = (f) => /\.doc$/i.test(f.name || "");
   /* ================= RENDER STATES ================= */
 
   if (!lookupDone) {
-    return <PageContainer title="Case Dashboard"><p style={emptyText}>Loading…</p></PageContainer>;
+    return <PageContainer title="Case Dashboard"><Loading /></PageContainer>;
   }
 
   if (archivedDoc) {
@@ -734,7 +760,10 @@ const isOldWordFile = (f) => /\.doc$/i.test(f.name || "");
         </button>
 
         <Card style={{ maxWidth: 520 }}>
-          <Badge tone="neutral">Archived</Badge>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <Badge tone={classTone(archivedDoc.case_class)}>{classLabel(archivedDoc.case_class)}</Badge>
+            <Badge tone="neutral">Archived</Badge>
+          </div>
 
           <h3 style={overviewTitle}>{archivedDoc.title}</h3>
 
@@ -801,8 +830,25 @@ const isOldWordFile = (f) => /\.doc$/i.test(f.name || "");
         </a>
       }
     >
+      {(() => {
+        const today = todayKey();
+        const next = hearings
+          .map(h => String(h.date || "").slice(0, 10))
+          .filter(d => d && d >= today)
+          .sort()[0];
+        return (
+          <div style={headerStrip}>
+                        <Badge tone={classTone(caseData.case_class)}>{classLabel(caseData.case_class)}</Badge>
+            <Badge tone={statusTone(caseData.status)}>{caseData.status || "No status"}</Badge>
+            {clientName && <span style={stripItem}>Client: <strong>{clientName}</strong></span>}
+            <span style={stripItem}>
+              Next hearing: <strong>{next ? formatDate(next) : "none scheduled"}</strong>
+            </span>
+          </div>
+        );
+      })()}
 
-      <div style={tabs}>
+      <div className="am-tabs" style={tabs}>
         {TABS.map(t => (
           <button
             key={t}
@@ -810,21 +856,36 @@ const isOldWordFile = (f) => /\.doc$/i.test(f.name || "");
             className="am-btn"
             style={tab === t ? activeTab : tabBtn}
           >
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+                        {t === "advochat" ? "AdvoChat" : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
 
       <Card>
 
+        {tab === "advochat" && <ChatPanel caseId={caseId} bare />}
         {/* VIEW */}
         {tab === "view" && (
           <div style={section}>
             <Input
-              label="Case Title"
+                            label="Case Title"
+              voice
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
             />
+
+            <label style={selectLabel}>Case Type</label>
+            <select
+              className="am-input"
+              value={form.case_class}
+              onChange={(e) => setForm({ ...form, case_class: e.target.value })}
+              style={selectStyle}
+            >
+              <option value="">Select Civil or Criminal</option>
+              {CASE_CLASSES.map(k => (
+                <option key={k.key} value={k.key}>{k.label}</option>
+              ))}
+            </select>
 
             <label style={selectLabel}>Status</label>
             <select
@@ -955,20 +1016,23 @@ const isOldWordFile = (f) => /\.doc$/i.test(f.name || "");
 
               <Input
                 label="Header"
+                                voice
                 placeholder="e.g. Key facts"
                 value={detailNoteForm.title}
                 onChange={(e) => setDetailNoteForm({ ...detailNoteForm, title: e.target.value })}
               />
 
               <label style={selectLabel}>Details</label>
-              <textarea
-                className="am-input"
-                placeholder="Write the details here…"
-                value={detailNoteForm.body}
-                onChange={(e) => setDetailNoteForm({ ...detailNoteForm, body: e.target.value })}
-                style={{ ...textareaStyle, minHeight: 160 }}
-                rows={8}
-              />
+                            <VoiceWrap>
+                <textarea
+                  className="am-input"
+                  placeholder="Write the details here…"
+                  value={detailNoteForm.body}
+                  onChange={(e) => setDetailNoteForm({ ...detailNoteForm, body: e.target.value })}
+                  style={{ ...textareaStyle, minHeight: 160 }}
+                  rows={8}
+                />
+              </VoiceWrap>
 
               <div style={{ display: "flex", gap: 10 }}>
                 <Button onClick={saveDetailNote} style={{ flex: 1 }}>
@@ -1019,20 +1083,23 @@ const isOldWordFile = (f) => /\.doc$/i.test(f.name || "");
 
               <Input
                 label="Header"
+                                voice
                 placeholder="e.g. Call with client"
                 value={noteForm.title}
                 onChange={(e) => setNoteForm({ ...noteForm, title: e.target.value })}
               />
 
               <label style={selectLabel}>Details</label>
-              <textarea
-                className="am-input"
-                placeholder="Write the details here…"
-                value={noteForm.body}
-                onChange={(e) => setNoteForm({ ...noteForm, body: e.target.value })}
-                style={{ ...textareaStyle, minHeight: 160 }}
-                rows={8}
-              />
+                            <VoiceWrap>
+                <textarea
+                  className="am-input"
+                  placeholder="Write the details here…"
+                  value={noteForm.body}
+                  onChange={(e) => setNoteForm({ ...noteForm, body: e.target.value })}
+                  style={{ ...textareaStyle, minHeight: 160 }}
+                  rows={8}
+                />
+              </VoiceWrap>
 
               <div style={{ display: "flex", gap: 10 }}>
                 <Button onClick={saveNote} style={{ flex: 1 }}>
@@ -1061,28 +1128,39 @@ const isOldWordFile = (f) => /\.doc$/i.test(f.name || "");
 
             <Input
               label="Event"
+                            voice
               placeholder="e.g. First hearing"
               value={hearingForm.event}
               onChange={(e) => setHearingForm({ ...hearingForm, event: e.target.value })}
             />
 
             <label style={selectLabel}>Notes</label>
-            <textarea
-              className="am-input"
-              placeholder="Notes"
-              value={hearingForm.notes}
-              onChange={(e) => setHearingForm({ ...hearingForm, notes: e.target.value })}
-              style={textareaStyle}
-            />
+                        <VoiceWrap>
+              <textarea
+                className="am-input"
+                placeholder="Notes"
+                value={hearingForm.notes}
+                onChange={(e) => setHearingForm({ ...hearingForm, notes: e.target.value })}
+                style={textareaStyle}
+              />
+            </VoiceWrap>
 
             <Button onClick={addHearing} style={{ alignSelf: "flex-start", marginBottom: 8 }}>
               Add Hearing
             </Button>
 
-            {sortedHearings.map(h => (
-              <div key={h.id} style={item}>
+                        {sortedHearings.map(h => (
+              <div
+                key={h.id}
+                role="link"
+                tabIndex={0}
+                className="am-card-hover"
+                style={{ ...item, cursor: "pointer" }}
+                onClick={() => navigate(`/hearings/${h.id}`)}
+                onKeyDown={(e) => { if (e.key === "Enter") navigate(`/hearings/${h.id}`); }}
+              >
                 <div style={itemTitle}>{h.event}</div>
-                <div style={itemMeta}>{h.date}</div>
+                <div style={itemMeta}>{formatDate(h.date)}</div>
                 {h.notes && <div style={itemMeta}>{h.notes}</div>}
               </div>
             ))}
@@ -1130,6 +1208,7 @@ const isOldWordFile = (f) => /\.doc$/i.test(f.name || "");
 
             <Input
               label="Description"
+                            voice
               placeholder="e.g. Drafting reply, court filing fee, hearing appearance"
               value={billingForm.description}
               onChange={(e) => setBillingForm({ ...billingForm, description: e.target.value })}
@@ -1230,13 +1309,15 @@ const isOldWordFile = (f) => /\.doc$/i.test(f.name || "");
             />
 
             <label style={selectLabel}>Notes</label>
-            <textarea
-              className="am-input"
-              placeholder="Optional notes"
-              value={paymentForm.notes}
-              onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
-              style={textareaStyle}
-            />
+                        <VoiceWrap>
+              <textarea
+                className="am-input"
+                placeholder="Optional notes"
+                value={paymentForm.notes}
+                onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
+                style={textareaStyle}
+              />
+            </VoiceWrap>
 
             <Button onClick={addPayment} style={{ alignSelf: "flex-start", marginBottom: 10 }}>
               Record Payment
@@ -1269,6 +1350,7 @@ const isOldWordFile = (f) => /\.doc$/i.test(f.name || "");
               <h2 style={{ fontFamily: font.display }}>{caseData.title}</h2>
               <p>Client: {clientName || "—"}</p>
               <p>Court: {(courtType || "").toUpperCase()}</p>
+                          <p>Case type: {classLabel(caseData.case_class)}</p>
               <hr />
               <h3>Billing Items</h3>
               <table style={printTable}>
@@ -1696,6 +1778,23 @@ const textViewer = {
   padding: "14px 16px",
   maxHeight: "50vh",
   overflowY: "auto",
+};
+
+const headerStrip = {
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  gap: "10px 18px",
+  background: colors.surface,
+  border: `1px solid ${colors.hairline}`,
+  borderRadius: radius.md,
+  padding: "12px 16px",
+  marginBottom: 16,
+};
+
+const stripItem = {
+  fontSize: "13px",
+  color: colors.slate,
 };
 
 const ocrDisclaimer = { fontSize: "11px", color: colors.slate, fontStyle: "italic", marginTop: 10, marginBottom: 0 };

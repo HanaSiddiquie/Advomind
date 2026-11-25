@@ -103,3 +103,16 @@ def process_file():
         "truncated": result.truncated,
         "chars": len(result.text),
     }), 200
+
+
+@ocr_bp.route("/health")
+def ocr_health():
+    try:
+        return jsonify({
+            "pymupdf": pymupdf.__version__,
+            "tesseract": str(pytesseract.get_tesseract_version()),
+            "installed_languages": sorted(pytesseract.get_languages(config="")),
+            "wanted_languages": ocr_service.OCR_LANGS,
+        })
+    except Exception as e:
+        return jsonify({"error": f"{type(e).__name__}: {e}"}), 500

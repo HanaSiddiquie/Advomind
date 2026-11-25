@@ -10,6 +10,8 @@ import Badge from "../components/ui/Badge";
 import { useAuthRole } from "../context/AuthRoleContext";
 import { fetchScoped } from "../services/scopedQuery";
 import { computeTotals, formatCurrency } from "../services/billing";
+import Loading from "../components/ui/Loading";
+import { formatDate } from "../utils/dates";
 
 function toDateKey(d) {
   const y = d.getFullYear();
@@ -77,6 +79,16 @@ function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hearings]);
 
+    const classCounts = useMemo(() => {
+    let civil = 0, criminal = 0, none = 0;
+    cases.forEach(c => {
+      if (c.case_class === "civil") civil++;
+      else if (c.case_class === "criminal") criminal++;
+      else none++;
+    });
+    return { civil, criminal, none };
+  }, [cases]);
+
   const onHoldCases = useMemo(() => cases.filter(c => c.status === "On Hold"), [cases]);
 
   const overdueHearings = useMemo(() => {
@@ -111,18 +123,21 @@ function Dashboard() {
       .slice(0, 8);
   }, [cases, hearings]);
 
-  const cards = [
-    { label: "Clients", value: clientsCount },
-    { label: "Cases", value: cases.length },
-    { label: "Hearings", value: hearings.length },
-    { label: "Outstanding Balance", value: formatCurrency(balance.balance), isMoney: true },
+    const cards = [
+    { label: "Clients", value: clientsCount, to: "/clients" },
+        {
+      label: "Cases",
+      value: cases.length,
+      to: "/cases",
+      sub: `${classCounts.civil} Civil · ${classCounts.criminal} Criminal` + (classCounts.none ? ` · ${classCounts.none} unclassified` : ""),
+    },
+    { label: "Hearings", value: hearings.length, to: "/hearings" },
+    { label: "Outstanding Balance", value: formatCurrency(balance.balance), isMoney: true, to: "/outstanding" },
   ];
 
   if (!loaded) {
     return (
-      <PageContainer eyebrow={court?.toUpperCase()} title="Dashboard" subtitle="Loading…">
-        <p style={emptyText}>Loading…</p>
-      </PageContainer>
+      <PageContainer eyebrow={court?.toUpperCase()} title="Dashboard"><Loading /></PageContainer>
     );
   }
 
@@ -134,9 +149,23 @@ function Dashboard() {
     >
       <div style={grid}>
         {cards.map((c) => (
-          <div key={c.label} style={card}>
+                    <div
+            key={c.label}
+            className="am-card-hover"
+            role="link"
+            tabIndex={0}
+            style={{ ...card, cursor: "pointer" }}
+            onClick={() => navigate(c.to)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                navigate(c.to);
+              }
+            }}
+          >
             <div style={cardLabel}>{c.label}</div>
             <div style={{ ...cardValue, fontSize: c.isMoney ? "26px" : "40px" }}>{c.value}</div>
+                        {c.sub && <div style={cardSub}>{c.sub}</div>}
             <div style={{ ...cardRule, background: c.isMoney && balance.balance > 0 ? colors.danger : colors.accent }} />
           </div>
         ))}
@@ -149,7 +178,7 @@ function Dashboard() {
         <div style={listGrid}>
           {thisWeekHearings.map(h => (
             <Card key={h.id} hoverable onClick={() => navigate(`/hearings/${h.id}`)}>
-              <Badge tone="accent">{h.date}</Badge>
+              <Badge tone="accent">{formatDate(h.date)}</Badge>
               <div style={rowTitle}>{h.event}</div>
               <div style={rowMeta}>{caseMap[h.case_id]?.title || "Unknown case"}</div>
             </Card>
@@ -158,10 +187,19 @@ function Dashboard() {
       )}
 
       <h3 style={groupTitle}>Needs Attention</h3>
-      {onHoldCases.length === 0 && overdueHearings.length === 0 ? (
+            {onHoldCases.length === 0 && overdueHearings.length === 0 && classCounts.none === 0 ? (
         <p style={emptyText}>Nothing needs attention right now</p>
       ) : (
         <div style={listGrid}>
+                    {classCounts.none > 0 && (
+            <Card hoverable onClick={() => navigate("/cases")}>
+              <Badge tone="warn">Unclassified</Badge>
+              <div style={rowTitle}>
+                {classCounts.none} case{classCounts.none === 1 ? "" : "s"} not marked Civil or Criminal
+              </div>
+              <div style={rowMeta}>Open Cases to set the type</div>
+            </Card>
+          )}
           {onHoldCases.map(c => (
             <Card key={c.id} hoverable onClick={() => navigate(`/cases/${c.id}`)}>
               <Badge tone="neutral">On Hold</Badge>
@@ -173,7 +211,7 @@ function Dashboard() {
             <Card key={h.id} hoverable onClick={() => navigate(`/hearings/${h.id}`)}>
               <Badge tone="danger">Overdue</Badge>
               <div style={rowTitle}>{h.event}</div>
-              <div style={rowMeta}>{h.date} · {caseMap[h.case_id]?.title || "Unknown case"} — status not updated since</div>
+              <div style={rowMeta}>{formatDate(h.date)} · {caseMap[h.case_id]?.title || "Unknown case"} — status not updated since</div>
             </Card>
           ))}
         </div>
@@ -225,6 +263,12 @@ const cardValue = {
   fontFamily: font.display,
   fontWeight: 600,
   color: colors.ink,
+};
+
+const cardSub = {
+  marginTop: "6px",
+  fontSize: "12px",
+  color: colors.slate,
 };
 
 const cardRule = {

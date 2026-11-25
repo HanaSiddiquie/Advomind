@@ -1,15 +1,20 @@
 // frontend/src/components/ui/Input.js
 import { colors, font, radius } from "../../styles/theme";
+import VoiceWrap from "./VoiceWrap";
 
-function Input({ label, style, className = "", ...props }) {
+function Input({ label, style, className = "", voice = false, ...props }) {
+  const field = (
+    <input
+      {...props}
+      className={`am-input ${className}`}
+      style={{ ...inputStyle, ...style }}
+    />
+  );
+
   return (
     <label style={wrapper}>
       {label && <span style={labelStyle}>{label}</span>}
-      <input
-        {...props}
-        className={`am-input ${className}`}
-        style={{ ...inputStyle, ...style }}
-      />
+      {voice ? <VoiceWrap>{field}</VoiceWrap> : field}
     </label>
   );
 }
